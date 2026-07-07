@@ -1,0 +1,17 @@
+{
+  "name": "qu-tuzilma-backend",
+  "version": "1.0.0",
+  "description": "Qo'qon Universiteti tashkiliy tuzilma — backend (Node + Express)",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "engines": {
+    "node": ">=16"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
