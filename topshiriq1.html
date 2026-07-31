@@ -3,74 +3,24 @@
 <title>1-topshiriq — Dasturlash asoslari</title>
 
 <style>
-  * { box-sizing: border-box; }
-  body {
-    font-family: Arial, Helvetica, sans-serif;
-    background: #f2f5f9;
-    color: #1a2433;
-    margin: 0;
-    padding: 20px;
-  }
+  body { font-family: Arial, sans-serif; background: #f2f5f9; color: #1a2433; padding: 20px; }
   h1 { font-size: 22px; text-align: center; }
   h2 { font-size: 17px; color: #1b62b3; margin: 0 0 10px; }
-
-  .karta {
-    background: #fff;
-    border: 1px solid #d7dee8;
-    border-radius: 10px;
-    padding: 16px;
-    margin: 0 auto 18px;
-    max-width: 640px;
-  }
-
-  .formula {
-    background: #eef3fa;
-    border-left: 4px solid #1b62b3;
-    padding: 10px;
-    font-family: "Courier New", monospace;
-    font-size: 14px;
-    margin-bottom: 12px;
-    overflow-x: auto;
-  }
-
-  label { display: inline-block; width: 40px; font-weight: bold; }
-  input {
-    width: 120px;
-    padding: 6px;
-    margin: 4px 8px 4px 0;
-    border: 1px solid #b9c4d2;
-    border-radius: 6px;
-    font-size: 14px;
-  }
-
-  button {
-    background: #1b62b3;
-    color: #fff;
-    border: 0;
-    border-radius: 6px;
-    padding: 9px 18px;
-    font-size: 14px;
-    cursor: pointer;
-    margin-top: 8px;
-  }
-  button:hover { background: #14508f; }
-
-  .natija {
-    margin-top: 12px;
-    padding: 10px;
-    background: #f6f8fb;
-    border: 1px dashed #b9c4d2;
-    border-radius: 6px;
-    font-family: "Courier New", monospace;
-    font-size: 14px;
-    white-space: pre-line;
-  }
-  .xato { color: #c0392b; font-weight: bold; }
+  .karta { background: #fff; border: 1px solid #d7dee8; border-radius: 10px;
+           padding: 16px; margin: 0 auto 18px; max-width: 640px; }
+  .formula { background: #eef3fa; border-left: 4px solid #1b62b3; padding: 10px;
+             font-family: monospace; font-size: 14px; margin-bottom: 12px; overflow-x: auto; }
+  label { font-weight: bold; }
+  input { width: 110px; padding: 6px; margin: 4px 10px 4px 4px;
+          border: 1px solid #b9c4d2; border-radius: 6px; }
+  button { background: #1b62b3; color: #fff; border: 0; border-radius: 6px;
+           padding: 9px 18px; cursor: pointer; margin-top: 8px; }
+  .natija { margin-top: 12px; padding: 10px; background: #f6f8fb;
+            border: 1px dashed #b9c4d2; border-radius: 6px; font-family: monospace; }
 </style>
 
 <h1>1-topshiriq — Dasturlash asoslari</h1>
 
-<!-- ===== 1 va 2-masala ===== -->
 <div class="karta">
   <h2>1–2. y = ... (a, b, α)</h2>
   <div class="formula">
@@ -78,212 +28,90 @@ y = (3.75a − b) / (a² + b² − (1.25a − b) / (a³ + b − (3a+b)/(7ab)))
     + (sin α + a) / (cos α + b)
     − ⁴√|2a − b| / ln|a − b| · e^(2π/(3b))
   </div>
-
   <label>a =</label><input id="a1" value="12.3">
   <label>b =</label><input id="b1" value="53.24">
   <label>α =</label><input id="al1" value="0.1543">
   <br>
   <button onclick="hisobla1()">Hisoblash</button>
-  <div class="natija" id="n1">Natija shu yerda chiqadi</div>
+  <div class="natija">y = <span id="n1">—</span></div>
 </div>
 
-<!-- ===== 3-masala ===== -->
 <div class="karta">
   <h2>3. v = ... (x, y, z)</h2>
   <div class="formula">
 v = (1 + sin²(x+y)) / |x − 2y/(1 + x²y²)| · x^|y| + cos²(arctg(1/z))
   </div>
-
   <label>x =</label><input id="x3" value="0.0374">
   <label>y =</label><input id="y3" value="-0.825">
   <label>z =</label><input id="z3" value="16">
   <br>
   <button onclick="hisobla3()">Hisoblash</button>
-  <div class="natija" id="n3">Natija shu yerda chiqadi</div>
+  <div class="natija">v = <span id="n3">—</span></div>
 </div>
 
-<!-- ===== 4-masala ===== -->
 <div class="karta">
   <h2>4. v = ... (x, y, z)</h2>
   <div class="formula">
 v = (1 + sin(x+y)) / |y/2| · cos(arctg(1/z))
   </div>
-
   <label>x =</label><input id="x4" value="3.74">
   <label>y =</label><input id="y4" value="5">
   <label>z =</label><input id="z4" value="0.16">
   <br>
   <button onclick="hisobla4()">Hisoblash</button>
-  <div class="natija" id="n4">Natija shu yerda chiqadi</div>
+  <div class="natija">v = <span id="n4">—</span></div>
 </div>
 
-<!-- ===== 5-masala ===== -->
 <div class="karta">
   <h2>5. y = ... (a, b)</h2>
   <div class="formula">
 y = (a − b) / (a² + b² − (a − b) / (a³ + (a+b)/7))
   </div>
-
   <label>a =</label><input id="a5" value="1.3">
   <label>b =</label><input id="b5" value="4">
   <br>
   <button onclick="hisobla5()">Hisoblash</button>
-  <div class="natija" id="n5">Natija shu yerda chiqadi</div>
+  <div class="natija">y = <span id="n5">—</span></div>
 </div>
 
 <script>
-/* ---------- Yordamchi funksiyalar ---------- */
-
 // input dan son o'qish
 function son(id) {
   return parseFloat(document.getElementById(id).value);
 }
 
-// natijani ekranga chiqarish
-function chiqar(id, matn, xatoMi) {
-  var el = document.getElementById(id);
-  el.innerHTML = matn;
-  el.className = xatoMi ? "natija xato" : "natija";
+// natijani chiqarish
+function yoz(id, v) {
+  document.getElementById(id).textContent =
+    isFinite(v) ? v.toFixed(6) : "Xato: nolga bo'linish yoki noaniqlik";
 }
 
-// son to'g'ri chiqqanini tekshirish (0 ga bo'lish, ildiz, log ...)
-function tekshir(v) {
-  return isFinite(v);
-}
-
-
-/* ---------- 1 va 2-masala ----------
-   ALGORITM:
-   1) a, b, α ni o'qiymiz
-   2) pastdan yuqoriga: eng ichki kasrdan boshlaymiz
-      m1 = a³ + b − (3a+b)/(7ab)
-      m2 = a² + b² − (1.25a − b)/m1
-   3) uchta qismni alohida hisoblaymiz: A, B, C
-   4) y = A + B − C
-------------------------------------- */
+// 1-2: ko'p qavatli kasrni ichkaridan boshlab hisoblaymiz
 function hisobla1() {
-  var a  = son("a1");
-  var b  = son("b1");
-  var al = son("al1");
-
-  // 1-qadam: eng ichki kasr
+  var a = son("a1"), b = son("b1"), al = son("al1");
   var m1 = Math.pow(a, 3) + b - (3 * a + b) / (7 * a * b);
-
-  // 2-qadam: katta maxraj
   var m2 = a * a + b * b - (1.25 * a - b) / m1;
-
-  // 3-qadam: uchta bo'lak
-  var A = (3.75 * a - b) / m2;
-  var B = (Math.sin(al) + a) / (Math.cos(al) + b);
-  var C = Math.pow(Math.abs(2 * a - b), 1 / 4) / Math.log(Math.abs(a - b))
-          * Math.exp(2 * Math.PI / (3 * b));
-
-  // 4-qadam: yig'amiz
-  var y = A + B - C;
-
-  if (!tekshir(y)) {
-    chiqar("n1", "Xato: nolga bo'linish yoki noto'g'ri qiymat!", true);
-    return;
-  }
-
-  chiqar("n1",
-    "m1 = " + m1.toFixed(6) + "\n" +
-    "m2 = " + m2.toFixed(6) + "\n" +
-    "A  = " + A.toFixed(6) + "\n" +
-    "B  = " + B.toFixed(6) + "\n" +
-    "C  = " + C.toFixed(6) + "\n" +
-    "y  = " + y.toFixed(6), false);
+  yoz("n1", (3.75 * a - b) / m2
+          + (Math.sin(al) + a) / (Math.cos(al) + b)
+          - Math.pow(Math.abs(2 * a - b), 1 / 4) / Math.log(Math.abs(a - b))
+            * Math.exp(2 * Math.PI / (3 * b)));
 }
 
-
-/* ---------- 3-masala ----------
-   1) surat  = 1 + sin²(x+y)
-   2) maxraj = |x − 2y/(1 + x²y²)|
-   3) daraja = x^|y|
-   4) oxirgi = cos²(arctg(1/z))
-   5) v = surat/maxraj * daraja + oxirgi
--------------------------------- */
 function hisobla3() {
-  var x = son("x3");
-  var y = son("y3");
-  var z = son("z3");
-
-  var surat  = 1 + Math.pow(Math.sin(x + y), 2);
-  var maxraj = Math.abs(x - (2 * y) / (1 + x * x * y * y));
-  var daraja = Math.pow(x, Math.abs(y));
-  var oxirgi = Math.pow(Math.cos(Math.atan(1 / z)), 2);
-
-  var v = (surat / maxraj) * daraja + oxirgi;
-
-  if (!tekshir(v)) {
-    chiqar("n3", "Xato: nolga bo'linish yoki noto'g'ri qiymat!", true);
-    return;
-  }
-
-  chiqar("n3",
-    "surat  = " + surat.toFixed(6) + "\n" +
-    "maxraj = " + maxraj.toFixed(6) + "\n" +
-    "x^|y|  = " + daraja.toFixed(6) + "\n" +
-    "cos²   = " + oxirgi.toFixed(6) + "\n" +
-    "v      = " + v.toFixed(6), false);
+  var x = son("x3"), y = son("y3"), z = son("z3");
+  yoz("n3", (1 + Math.pow(Math.sin(x + y), 2)) / Math.abs(x - 2 * y / (1 + x * x * y * y))
+          * Math.pow(x, Math.abs(y))
+          + Math.pow(Math.cos(Math.atan(1 / z)), 2));
 }
 
-
-/* ---------- 4-masala ----------
-   v = (1 + sin(x+y)) / |y/2| * cos(arctg(1/z))
--------------------------------- */
 function hisobla4() {
-  var x = son("x4");
-  var y = son("y4");
-  var z = son("z4");
-
-  var surat  = 1 + Math.sin(x + y);
-  var maxraj = Math.abs(y / 2);
-  var kos    = Math.cos(Math.atan(1 / z));
-
-  var v = (surat / maxraj) * kos;
-
-  if (!tekshir(v)) {
-    chiqar("n4", "Xato: nolga bo'linish yoki noto'g'ri qiymat!", true);
-    return;
-  }
-
-  chiqar("n4",
-    "surat  = " + surat.toFixed(6) + "\n" +
-    "maxraj = " + maxraj.toFixed(6) + "\n" +
-    "cos    = " + kos.toFixed(6) + "\n" +
-    "v      = " + v.toFixed(6), false);
+  var x = son("x4"), y = son("y4"), z = son("z4");
+  yoz("n4", (1 + Math.sin(x + y)) / Math.abs(y / 2) * Math.cos(Math.atan(1 / z)));
 }
 
-
-/* ---------- 5-masala ----------
-   1) ichki  = a³ + (a+b)/7
-   2) maxraj = a² + b² − (a−b)/ichki
-   3) y = (a−b)/maxraj
--------------------------------- */
 function hisobla5() {
-  var a = son("a5");
-  var b = son("b5");
-
-  var ichki  = Math.pow(a, 3) + (a + b) / 7;
-  var maxraj = a * a + b * b - (a - b) / ichki;
-  var y      = (a - b) / maxraj;
-
-  if (!tekshir(y)) {
-    chiqar("n5", "Xato: nolga bo'linish yoki noto'g'ri qiymat!", true);
-    return;
-  }
-
-  chiqar("n5",
-    "ichki  = " + ichki.toFixed(6) + "\n" +
-    "maxraj = " + maxraj.toFixed(6) + "\n" +
-    "y      = " + y.toFixed(6), false);
+  var a = son("a5"), b = son("b5");
+  var m = a * a + b * b - (a - b) / (Math.pow(a, 3) + (a + b) / 7);
+  yoz("n5", (a - b) / m);
 }
-
-
-/* Sahifa ochilganda barchasi darrov hisoblansin */
-hisobla1();
-hisobla3();
-hisobla4();
-hisobla5();
 </script>
