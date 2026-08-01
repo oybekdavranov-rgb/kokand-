@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b0710">
+<title>ZINNURA — sen uchun</title>
+<meta name="description" content="Zinnura uchun tayyorlangan tabrik sahifasi: xotiralar, lahzalar va eng iliq tilaklar.">
+
+<!-- Shaxsiy sahifa: qidiruv tizimlari indekslamasin.
+     Ochiq bo'lishini xohlasangiz — shu qatorni o'chiring. -->
+<meta name="robots" content="noindex, nofollow">
+
+<meta property="og:type" content="website">
+<meta property="og:title" content="ZINNURA — sen uchun">
+<meta property="og:description" content="Xotiralar, lahzalar va eng iliq tilaklar.">
+<meta property="og:image" content="assets/media/photos/p07.jpg">
+<meta name="twitter:card" content="summary_large_image">
+
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9C%A6%3C/text%3E%3C/svg%3E">
+
+<!-- Shriftlar loyiha ichida: internet bo'lmasa ham sayt to'liq ishlaydi -->
+<link rel="preload" as="font" type="font/woff2" href="assets/fonts/cormorant-garamond-c47ff128.woff2" crossorigin>
+<link rel="preload" as="font" type="font/woff2" href="assets/fonts/great-vibes-51c0e8c2.woff2" crossorigin>
+<link rel="preload" as="font" type="font/woff2" href="assets/fonts/manrope-938c6e80.woff2" crossorigin>
+
+<link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body class="is-locked">
+
+<!-- ══════════════ 0. KIRISH DARVOZASI ══════════════ -->
+<div class="gate" id="gate">
+  <div class="gate__glow"></div>
+  <div class="gate__inner">
+    <p class="gate__eyebrow">bir sahifa &mdash; bitta ism uchun</p>
+
+    <h1 class="gate__name" aria-label="Zinnura">
+      <span>Z</span><span>I</span><span>N</span><span>N</span><span>U</span><span>R</span><span>A</span>
+    </h1>
+
+    <p class="gate__sub">Bu sahifa senga atalgan.</p>
+
+    <button class="gate__btn" id="gateBtn" type="button">
+      <span class="gate__btn-txt">Konvertni ochish</span>
+      <span class="gate__btn-ico">✦</span>
+    </button>
+
+    <p class="gate__hint">🎧 Ovozni yoqib qo'ysang &mdash; yanada chiroyli bo'ladi</p>
+  </div>
+</div>
+
+
+<!-- ══════════════ FON EFFEKTLARI ══════════════ -->
+<canvas class="petals" id="petals" aria-hidden="true"></canvas>
+<div class="cursor-glow" id="cursorGlow" aria-hidden="true"></div>
+<div class="scroll-bar" id="scrollBar" aria-hidden="true"></div>
+
+
+<!-- ══════════════ NAVIGATSIYA ══════════════ -->
+<nav class="nav" id="nav">
+  <a class="nav__brand" href="#hero">Z<span>innura</span></a>
+  <ul class="nav__list">
+    <li><a href="#letter">Tabrik</a></li>
+    <li><a href="#gallery">Xotiralar</a></li>
+    <li><a href="#videos">Lahzalar</a></li>
+    <li><a href="#wishes">Tilaklar</a></li>
+    <li><a href="#name">Ism</a></li>
+    <li><a href="#finale">Yakun</a></li>
+  </ul>
+  <button class="nav__sound" id="soundBtn" type="button" aria-label="Musiqa" title="Musiqa">
+    <svg viewBox="0 0 24 24" class="ico-on"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M16.5 8.5a5 5 0 0 1 0 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M19 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+    <svg viewBox="0 0 24 24" class="ico-off"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M16 9.5l5 5M21 9.5l-5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+  </button>
+</nav>
+
+
+<main>
+
+<!-- ══════════════ 1. HERO ══════════════ -->
+<section class="hero" id="hero">
+  <div class="hero__bg" id="heroBg">
+    <img src="assets/media/photos/p05.jpg" alt="" class="is-on">
+    <img src="assets/media/photos/p09.jpg" alt="">
+    <img src="assets/media/photos/p07.jpg" alt="">
+    <img src="assets/media/photos/p02.jpg" alt="">
+    <img src="assets/media/photos/p12.jpg" alt="">
+  </div>
+  <div class="hero__veil"></div>
+  <div class="hero__rays" aria-hidden="true"></div>
+
+  <div class="hero__content">
+    <p class="hero__eyebrow"><span>✦</span> sen uchun &mdash; faqat sen uchun <span>✦</span></p>
+
+    <h2 class="hero__title" aria-label="Zinnura">
+      <span class="l">Z</span><span class="l">i</span><span class="l">n</span><span class="l">n</span><span class="l">u</span><span class="l">r</span><span class="l">a</span>
+    </h2>
+
+    <p class="hero__script">nurdan yaralgan ism</p>
+
+    <p class="hero__lead">
+      Bu yerda bir nechta kadr, bir nechta kulgi va juda ko'p iliq so'z bor.<br>
+      Hammasi &mdash; senga.
+    </p>
+
+    <div class="hero__meta">
+      <span>14 kadr</span><i>·</i><span>5 lahza</span><i>·</i><span>1 ism</span>
+    </div>
+  </div>
+
+  <a class="hero__scroll" href="#letter" aria-label="Pastga">
+    <span class="hero__mouse"><i></i></span>
+    <span class="hero__scroll-txt">pastga</span>
+  </a>
+</section>
+
+
+<!-- ══════════════ 2. TABRIK XATI ══════════════ -->
+<section class="letter" id="letter">
+  <div class="sec-head" data-reveal>
+    <p class="sec-kicker">01 &mdash; Tabrik</p>
+    <h2 class="sec-title">Assalomu alaykum,<br><em>Zinnura</em></h2>
+  </div>
+
+  <article class="paper" data-reveal>
+    <div class="paper__seal">Z</div>
+
+    <p class="paper__lead">
+      <span class="dropcap">B</span>a'zi insonlar hayotimizga shunchaki kirib kelmaydi &mdash;
+      ular kelganda atrof yorishib ketadi. Sen ana shunday insonsan.
+    </p>
+
+    <p>
+      Bu sahifani men sendan hech narsa so'ramay, hech narsa kutmay tayyorladim.
+      Faqat bitta iltimos bilan: bugun o'zingga bir marta bo'lsa ham
+      <b>&laquo;men zo'rman&raquo;</b> deb ayt. Chunki bu &mdash; haqiqat.
+    </p>
+
+    <p>
+      Yillar o'tadi, suratlar sarg'ayadi, ovozlar unutiladi.
+      Lekin yaxshi odamning yaxshiligi hech qachon eskirmaydi.
+      Sen yaxshi odamsan, Zinnura. Buni hech kim sendan tortib ololmaydi.
+    </p>
+
+    <p>
+      Tabriklayman seni! Kelayotgan har bir kuning shu suratlardagi
+      tabassumingdek yorug' bo'lsin. Ko'nglingga g'ubor qo'nmasin,
+      yo'llaring ravon, orzularing ro'yobda bo'lsin.
+    </p>
+
+    <p class="paper__ps">
+      P.S. Agar biror kuni charchasang &mdash; shu sahifani ochib qo'y.
+      Bu yerda sen har doim eng chiroylisisan.
+    </p>
+
+    <div class="paper__sign">
+      <span class="paper__sign-name">mehr bilan</span>
+      <span class="paper__sign-line"></span>
+    </div>
+  </article>
+</section>
+
+
+<!-- ══════════════ 3. GALEREYA ══════════════ -->
+<section class="gallery" id="gallery">
+  <div class="sec-head" data-reveal>
+    <p class="sec-kicker">02 &mdash; Xotiralar</p>
+    <h2 class="sec-title">Saqlanib qolgan <em>kadrlar</em></h2>
+    <p class="sec-sub">O'n to'rtta surat. O'n to'rtta tabassum. Bosib ko'ring &mdash; kattalashadi.</p>
+  </div>
+
+  <div class="grid" id="grid" data-reveal></div>
+</section>
+
+
+<!-- ══════════════ 4. VIDEO LAHZALAR ══════════════ -->
+<section class="videos" id="videos">
+  <div class="sec-head" data-reveal>
+    <p class="sec-kicker">03 &mdash; Jonli lahzalar</p>
+    <h2 class="sec-title">Harakatdagi <em>xotiralar</em></h2>
+    <p class="sec-sub">🔊 Bosganda ovoz bilan ochiladi &mdash; musiqa o'zi pauzaga tushadi.</p>
+  </div>
+
+  <div class="clips" id="clips" data-reveal></div>
+
+  <div class="notes-wrap" data-reveal>
+    <p class="notes-title">Dumaloq video-xabarlar</p>
+    <div class="notes" id="notes"></div>
+  </div>
+</section>
+
+
+<!-- ══════════════ 5. TILAKLAR ══════════════ -->
+<section class="wishes" id="wishes">
+  <div class="sec-head" data-reveal>
+    <p class="sec-kicker">04 &mdash; Tilaklar</p>
+    <h2 class="sec-title">Sen uchun <em>sakkiz tilak</em></h2>
+    <p class="sec-sub">Har biri alohida aytilgan. Hech biri ortiqcha emas.</p>
+  </div>
+
+  <div class="wish-grid" id="wishGrid"></div>
+</section>
+
+
+<!-- ══════════════ 6. ISM ══════════════ -->
+<section class="name" id="name">
+  <div class="sec-head" data-reveal>
+    <p class="sec-kicker">05 &mdash; Ism</p>
+    <h2 class="sec-title">&laquo;Zinnura&raquo; &mdash; <em>nur egasi</em></h2>
+    <p class="sec-sub">
+      Ism arabcha <b>nur</b> (yorug'lik) so'ziga borib taqaladi.
+      Ma'nosi &mdash; nurli, yorug'lik sohibasi. Ismi bilan o'zi bir xil bo'lgan odamlar kam.
+      Sen ulardan birisan.
+    </p>
+  </div>
+
+  <div class="acrostic" id="acrostic"></div>
+</section>
+
+
+<!-- ══════════════ 7. KICHIK HIKOYA ══════════════ -->
+<section class="story" id="story">
+  <div class="sec-head" data-reveal>
+    <p class="sec-kicker">06 &mdash; Kichik hikoya</p>
+    <h2 class="sec-title">To'rt <em>qatorda</em></h2>
+  </div>
+
+  <ol class="timeline" id="timeline"></ol>
+</section>
+
+
+<!-- ══════════════ 8. YAKUN ══════════════ -->
+<section class="finale" id="finale">
+  <div class="finale__bg"><img src="assets/media/photos/p14.jpg" alt=""></div>
+  <div class="finale__veil"></div>
+
+  <div class="finale__content" data-reveal>
+    <p class="finale__kicker">07 &mdash; Yakun</p>
+    <h2 class="finale__title">Baxtli bo'l,<br><span>Zinnura</span></h2>
+    <p class="finale__text">
+      Nima bo'lganda ham &mdash; sen yaxshilikka loyiqsan.<br>
+      Shuni hech qachon unutma.
+    </p>
+
+    <button class="heart-btn" id="heartBtn" type="button">
+      <span class="heart-btn__ico">♡</span>
+      <span class="heart-btn__txt">Yurak yubor</span>
+      <span class="heart-btn__count" id="heartCount">0</span>
+    </button>
+
+    <p class="finale__sign">&mdash; sen bilan g'ururlanadigan biri</p>
+  </div>
+</section>
+
+</main>
+
+<footer class="foot">
+  <p class="foot__name">ZINNURA</p>
+  <p class="foot__txt">Mehr bilan yasaldi &middot; 2026 &middot; Qo'qon</p>
+</footer>
+
+
+<!-- ══════════════ LIGHTBOX ══════════════ -->
+<div class="lb" id="lb" role="dialog" aria-modal="true" aria-label="Surat">
+  <button class="lb__close" id="lbClose" type="button" aria-label="Yopish">✕</button>
+  <button class="lb__nav lb__nav--prev" id="lbPrev" type="button" aria-label="Oldingi">‹</button>
+  <button class="lb__nav lb__nav--next" id="lbNext" type="button" aria-label="Keyingi">›</button>
+  <figure class="lb__stage">
+    <img id="lbImg" src="" alt="">
+    <figcaption id="lbCap"></figcaption>
+  </figure>
+  <p class="lb__count" id="lbCount"></p>
+</div>
+
+
+<!-- ══════════════ VIDEO MODAL ══════════════ -->
+<div class="vm" id="vm" role="dialog" aria-modal="true" aria-label="Video">
+  <button class="vm__close" id="vmClose" type="button" aria-label="Yopish">✕</button>
+  <div class="vm__stage">
+    <div class="vm__frame" id="vmFrame">
+      <video id="vmVideo" playsinline preload="metadata"></video>
+      <svg class="vm__ring" viewBox="0 0 100 100" aria-hidden="true">
+        <circle class="vm__ring-bg" cx="50" cy="50" r="48.4"/>
+        <circle class="vm__ring-fg" cx="50" cy="50" r="48.4" id="vmRing"/>
+      </svg>
+      <button class="vm__toggle" id="vmToggle" type="button" aria-label="Play / pauza"></button>
+    </div>
+    <p class="vm__cap" id="vmCap"></p>
+  </div>
+</div>
+
+<script src="assets/js/app.js"></script>
+</body>
+</html>
