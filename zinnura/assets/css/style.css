@@ -120,51 +120,83 @@
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 @font-face {
-  font-family: 'Cinzel Decorative';
-  font-style: normal;
+  font-family: 'Bodoni Moda';
+  font-style: italic;
   font-weight: 400;
   font-display: swap;
-  src: url(../fonts/cinzel-decorative-c5741659.woff2) format('woff2');
+  src: url(../fonts/bodoni-moda-56407a05.woff2) format('woff2');
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
 @font-face {
-  font-family: 'Cinzel Decorative';
-  font-style: normal;
+  font-family: 'Bodoni Moda';
+  font-style: italic;
   font-weight: 400;
   font-display: swap;
-  src: url(../fonts/cinzel-decorative-2813597b.woff2) format('woff2');
+  src: url(../fonts/bodoni-moda-c409f745.woff2) format('woff2');
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 @font-face {
-  font-family: 'Cinzel Decorative';
+  font-family: 'Bodoni Moda';
   font-style: normal;
-  font-weight: 700;
+  font-weight: 400;
   font-display: swap;
-  src: url(../fonts/cinzel-decorative-93147359.woff2) format('woff2');
+  src: url(../fonts/bodoni-moda-2f380b11.woff2) format('woff2');
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
 @font-face {
-  font-family: 'Cinzel Decorative';
+  font-family: 'Bodoni Moda';
   font-style: normal;
-  font-weight: 700;
+  font-weight: 400;
   font-display: swap;
-  src: url(../fonts/cinzel-decorative-280e13f3.woff2) format('woff2');
+  src: url(../fonts/bodoni-moda-0492c861.woff2) format('woff2');
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 @font-face {
-  font-family: 'Cinzel Decorative';
+  font-family: 'Bodoni Moda';
   font-style: normal;
-  font-weight: 900;
+  font-weight: 500;
   font-display: swap;
-  src: url(../fonts/cinzel-decorative-3577c2e8.woff2) format('woff2');
+  src: url(../fonts/bodoni-moda-2f380b11.woff2) format('woff2');
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
 @font-face {
-  font-family: 'Cinzel Decorative';
+  font-family: 'Bodoni Moda';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(../fonts/bodoni-moda-0492c861.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Bodoni Moda';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url(../fonts/bodoni-moda-2f380b11.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Bodoni Moda';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url(../fonts/bodoni-moda-0492c861.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Bodoni Moda';
   font-style: normal;
   font-weight: 900;
   font-display: swap;
-  src: url(../fonts/cinzel-decorative-c1b5fd04.woff2) format('woff2');
+  src: url(../fonts/bodoni-moda-2f380b11.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Bodoni Moda';
+  font-style: normal;
+  font-weight: 900;
+  font-display: swap;
+  src: url(../fonts/bodoni-moda-0492c861.woff2) format('woff2');
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 @font-face {
@@ -343,14 +375,15 @@
   --muted: #a08fb8;
 
   /* ism uchun — uchala rang oqib o'tadi */
-  --grad:      linear-gradient(102deg,#ffeab4 0%,#f2cf7a 20%,#35e0b0 44%,#c9a7f0 68%,#f2cf7a 90%,#ffeab4 100%);
+  --grad:      linear-gradient(102deg,#fff4d6 0%,#f2cf7a 19%,#2fd8a8 43%,#b579ec 67%,#f2cf7a 89%,#fff4d6 100%);
   /* sarlavha urg'usi uchun — tillo → binafsha, tinchroq */
   --grad-em:   linear-gradient(96deg,#f2cf7a 0%,#ffeab4 30%,#c9a7f0 66%,#a865e0 100%);
   /* arabcha yozuv uchun — sof tillo */
   --grad-gold: linear-gradient(100deg,#c2913a 0%,#f2cf7a 22%,#fff6dc 48%,#f2cf7a 74%,#c2913a 100%);
   --grad-line: linear-gradient(90deg,transparent,var(--gold-deep) 22%,var(--jade) 50%,var(--violet) 78%,transparent);
 
-  --display: 'Cinzel Decorative', 'Trajan Pro', Georgia, serif;
+  /* ism uchun — yuqori kontrastli, nozik serifli didone */
+  --display: 'Bodoni Moda', 'Bodoni 72', 'Didot', 'Playfair Display', Georgia, serif;
   --head:    'Gloock', 'Bodoni MT', 'Didot', Georgia, serif;
   --script:  'Italianno', 'Snell Roundhand', cursive;
   --ui:      'Syne', ui-sans-serif, system-ui, -apple-system, sans-serif;
@@ -364,7 +397,15 @@
 }
 
 *,*::before,*::after{ box-sizing:border-box; }
-html{ scroll-behavior:smooth; -webkit-text-size-adjust:100%; }
+/* Nur qatlamlari (.nur::before / ::after) atayin element chegarasidan
+   tashqariga chiqadi — gorizontal skroll paydo bo'lmasligi uchun ildizda qirqamiz.
+   `clip` — `hidden`dan farqli — skroll konteyner yaratmaydi, shuning uchun
+   position:fixed elementlar (nav, konvert) bemalol ishlayveradi. */
+html{
+  scroll-behavior:smooth; -webkit-text-size-adjust:100%;
+  overflow-x:hidden;      /* eski brauzerlar uchun */
+  overflow-x:clip;
+}
 
 body{
   margin:0;
@@ -374,6 +415,7 @@ body{
   font-weight:300;
   line-height:1.75;
   overflow-x:hidden;
+  overflow-x:clip;
   -webkit-font-smoothing:antialiased;
 }
 body.is-locked{ overflow:hidden; height:100dvh; }
@@ -603,7 +645,7 @@ body::after{  /* donadorlik */
 .seal__circle{ fill:none; stroke:rgba(70,44,10,.45); stroke-width:1.4; stroke-dasharray:5 4; }
 .seal__circle--in{ stroke-dasharray:none; stroke-width:.9; stroke:rgba(70,44,10,.3); }
 .seal__glyph{
-  font-family:var(--display); font-weight:900; font-size:42px; fill:#5c3f10;
+  font-family:var(--display); font-weight:700; font-size:46px; fill:#5c3f10;
   text-anchor:middle; dominant-baseline:central; letter-spacing:.02em;
 }
 
@@ -768,13 +810,8 @@ body::after{  /* donadorlik */
 .hero__title{
   position:relative;
   margin:0; display:block; text-align:center;
-  font-family:var(--display); font-weight:700;
-  font-size:clamp(38px,10.5vw,132px); line-height:1; letter-spacing:.06em;
-}
-.hero__title::after{  /* orqadagi tillo shu'la */
-  content:''; position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
-  width:120%; height:200%; z-index:-1; pointer-events:none;
-  background:radial-gradient(ellipse at center, rgba(242,207,122,.22), transparent 62%);
+  font-family:var(--display); font-weight:600;
+  font-size:clamp(38px,10.5vw,132px); line-height:1; letter-spacing:.10em; text-indent:.10em;
 }
 /* Har bir harf umumiy gradientning o'z bo'lagini ko'rsatadi (--bp),
    shu sababli rang butun "ZINNURA" bo'ylab uzluksiz oqadi. */
@@ -872,6 +909,58 @@ section{ position:relative; padding:clamp(78px,11vw,150px) var(--pad); z-index:2
 
 [data-reveal]{ opacity:0; transform:translateY(42px); transition:opacity 1.05s var(--ease-o), transform 1.05s var(--ease-o); }
 [data-reveal].is-in{ opacity:1; transform:none; }
+
+
+/* ═══════════════════════════════════════════════════════════
+   8b. NUR — matnlar ortidan taralib turadigan yorug'lik
+   ═══════════════════════════════════════════════════════════ */
+.nur{ position:relative; isolation:auto; }
+.nur::before{
+  content:''; position:absolute; left:50%; top:50%;
+  width:var(--nur-w,150%); height:var(--nur-h,260%);
+  transform:translate(-50%,-50%); z-index:-1; pointer-events:none;
+  background:radial-gradient(ellipse at center,
+    rgba(255,246,220,var(--nur-a,.22)) 0%,
+    rgba(242,207,122,calc(var(--nur-a,.22) * .8)) 22%,
+    rgba(168,101,224,calc(var(--nur-a,.22) * .55)) 44%,
+    rgba(53,224,176,calc(var(--nur-a,.22) * .28)) 60%,
+    transparent 74%);
+  filter:blur(var(--nur-b,14px));
+  animation:nurBreathe var(--nur-s,7s) ease-in-out infinite;
+}
+@keyframes nurBreathe{
+  0%,100%{ opacity:.7; transform:translate(-50%,-50%) scale(1) }
+  50%    { opacity:1;  transform:translate(-50%,-50%) scale(1.08) }
+}
+
+/* kuchli variant — aylanuvchi nur nurlari bilan */
+.nur--rays::after{
+  content:''; position:absolute; left:50%; top:50%;
+  width:var(--ray-w,8.5em); height:var(--ray-w,8.5em);
+  transform:translate(-50%,-50%); z-index:-2; pointer-events:none;
+  background:conic-gradient(from 0deg,
+    transparent 0deg,   rgba(255,246,220,.16) 4deg,  transparent 9deg,
+    transparent 32deg,  rgba(242,207,122,.13) 36deg, transparent 41deg,
+    transparent 68deg,  rgba(53,224,176,.10)  72deg, transparent 77deg,
+    transparent 104deg, rgba(255,246,220,.13) 108deg,transparent 113deg,
+    transparent 140deg, rgba(168,101,224,.13) 144deg,transparent 149deg,
+    transparent 176deg, rgba(242,207,122,.12) 180deg,transparent 185deg,
+    transparent 212deg, rgba(255,246,220,.11) 216deg,transparent 221deg,
+    transparent 248deg, rgba(53,224,176,.10)  252deg,transparent 257deg,
+    transparent 284deg, rgba(168,101,224,.12) 288deg,transparent 293deg,
+    transparent 320deg, rgba(242,207,122,.12) 324deg,transparent 329deg);
+  -webkit-mask-image:radial-gradient(circle, #000 0%, rgba(0,0,0,.42) 34%, transparent 66%);
+          mask-image:radial-gradient(circle, #000 0%, rgba(0,0,0,.42) 34%, transparent 66%);
+  animation:spin 54s linear infinite;
+}
+
+/* o'lchamlar */
+.nur--xl { --nur-w:170%; --nur-h:300%; --nur-a:.30; --nur-b:22px; }
+.nur--lg { --nur-w:155%; --nur-h:270%; --nur-a:.24; --nur-b:18px; }
+.nur--sm { --nur-w:130%; --nur-h:230%; --nur-a:.15; --nur-b:12px; --nur-s:8s; }
+.nur--xs { --nur-w:150%; --nur-h:220%; --nur-a:.11; --nur-b:10px; --nur-s:9s; }
+/* chapga tekislangan matnlar uchun — nur matn boshidan tarqaladi */
+.nur--left::before{ left:34%; }
 
 
 /* ---------- 9. ISM (arabcha) ---------- */
@@ -1246,8 +1335,8 @@ section{ position:relative; padding:clamp(78px,11vw,150px) var(--pad); z-index:2
 .foot{ padding:56px var(--pad) 48px; text-align:center; border-top:1px solid rgba(242,207,122,.12); position:relative; z-index:2; }
 .foot__ar{ margin:0 0 6px; font-family:var(--ar); font-size:clamp(24px,4vw,34px); color:var(--gold); opacity:.85; }
 .foot__name{
-  margin:0 0 10px; font-family:var(--display); font-weight:900;
-  font-size:clamp(16px,2.6vw,24px); letter-spacing:.42em; text-indent:.42em;
+  margin:0 0 10px; font-family:var(--display); font-weight:500;
+  font-size:clamp(17px,2.8vw,26px); letter-spacing:.42em; text-indent:.42em;
   background:var(--grad); background-size:240% 100%;
   -webkit-background-clip:text; background-clip:text; color:transparent;
   animation:shimmer 11s linear infinite;

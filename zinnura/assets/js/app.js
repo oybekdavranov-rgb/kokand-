@@ -111,7 +111,7 @@
   $('#wishGrid').innerHTML = WISHES.map((w, i) => `
     <article class="wish">
       <span class="wish__ico">${w.i}</span>
-      <h3 class="wish__t">${w.t}</h3>
+      <h3 class="wish__t nur nur--xs nur--left">${w.t}</h3>
       <p class="wish__d">${w.d}</p>
       <span class="wish__n">${String(i + 1).padStart(2, '0')}</span>
     </article>`).join('');
@@ -128,7 +128,7 @@
       </figure>
       <div class="frame__text">
         <p class="frame__k"><i></i>${fr.k}</p>
-        <h3 class="frame__t">${fr.t}</h3>
+        <h3 class="frame__t nur nur--sm nur--left">${fr.t}</h3>
         <p class="frame__d">${fr.d}</p>
         <span class="frame__wish">${fr.w}</span>
       </div>
@@ -141,7 +141,7 @@
              autoplay muted loop playsinline preload="auto"></video>
       <span class="clip__live"><b></b>jonli</span>
       <span class="clip__snd">🔊</span>
-      <figcaption class="clip__meta"><span>${c.s}</span><b>${c.t}</b></figcaption>
+      <figcaption class="clip__meta"><span>${c.s}</span><b class="nur nur--xs nur--left">${c.t}</b></figcaption>
     </figure>`).join('');
 
   $('#notes').innerHTML = NOTES.map(n => `

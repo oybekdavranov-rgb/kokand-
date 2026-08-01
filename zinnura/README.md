@@ -49,6 +49,27 @@ Qo'shimcha: skroll indikatori, kursor nuri, uchuvchi zarralar, aurora fon,
 marquee, klaviatura boshqaruvi (`←` `→` `Esc`), telefonda svayp,
 `prefers-reduced-motion` qo'llab-quvvatlanadi.
 
+### Nur — matnlar ortidan taralayotgan yorug'lik
+
+Ism, sarlavhalar va arabcha yozuvlar ortida yumshoq nur turadi va sekin
+"nafas oladi". CSS'da `.nur` klassi bilan beriladi, o'lchamlari sozlanadi:
+
+```html
+<h2 class="sec-title nur">…</h2>              <!-- oddiy -->
+<h1 class="hero__title nur nur--xl nur--rays">…</h1>  <!-- kuchli + aylanuvchi nurlar -->
+<h3 class="frame__t nur nur--sm nur--left">…</h3>     <!-- chapga tekislangan matn uchun -->
+```
+
+| Klass | Vazifasi |
+|---|---|
+| `nur` | asosiy yumshoq nur |
+| `nur--xl` / `nur--lg` / `nur--sm` / `nur--xs` | kuchi va o'lchami |
+| `nur--rays` | qo'shimcha aylanuvchi nur nurlari |
+| `nur--left` | nur markazi matn boshiga suriladi |
+
+> Nur qatlamlari atayin element chegarasidan chiqadi, shuning uchun
+> `html`/`body` da `overflow-x: clip` turibdi — aks holda gorizontal skroll paydo bo'ladi.
+
 ### Musiqa — skripka + pianino
 
 Musiqa **fayl emas**. U brauzerning Web Audio API'si orqali jonli generatsiya qilinadi:
@@ -90,7 +111,7 @@ videoni bosing — modal ochiladi va musiqa o'zi pasayadi.
 
 | Vazifasi | Shrift |
 |---|---|
-| Katta ism, logotip | **Cinzel Decorative** |
+| Katta ism, logotip | **Bodoni Moda** (yuqori kontrastli didone) |
 | Sarlavhalar | **Gloock** |
 | Qo'lyozma urg'ular | **Italianno** |
 | Yorliq va menyu | **Syne** |
