@@ -1,17 +1,16 @@
 {
-  "name": "qu-tuzilma-backend",
-  "version": "1.0.0",
-  "description": "Qo'qon Universiteti tashkiliy tuzilma — backend (Node + Express)",
-  "main": "server.js",
-  "type": "commonjs",
+  "name": "imora-ai",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Imora AI — sun'iy intellekt yordamida ishora tilini o'rganish va muloqot platformasi (frontend)",
+  "type": "module",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node server.js"
-  },
-  "engines": {
-    "node": ">=16"
+    "build": "node build-inline.mjs",
+    "serve": "node serve.mjs"
   },
   "dependencies": {
-    "express": "^4.19.2"
+    "gsap": "3.12.5",
+    "playwright-core": "^1.62.1",
+    "three": "0.149.0"
   }
 }
