@@ -1,0 +1,4 @@
+node_modules/
+*.log
+dist/_arttest.html
+.DS_Store
