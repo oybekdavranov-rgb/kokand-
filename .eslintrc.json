@@ -1,0 +1,8 @@
+{
+  "extends": ["next/core-web-vitals", "next/typescript"],
+  "ignorePatterns": ["legacy-kokand/**", ".next/**", "node_modules/**"],
+  "rules": {
+    "@typescript-eslint/no-explicit-any": "error",
+    "@typescript-eslint/consistent-type-imports": "warn"
+  }
+}

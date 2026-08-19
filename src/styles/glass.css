@@ -1,0 +1,109 @@
+/* =====================================================================
+   IMORA AI — SHISHA KARTA (Apple-style glass)  (CLAUDE.md §3.1)
+   Bitta komponent, ikki variant: .glass--clear | .glass--frosted.
+   Har ikkalasida glow-line (::before) + orqa nur (::after) majburiy.
+   Kursor spotlight: --mx / --my o'zgaruvchilari pointermove'da yangilanadi.
+   ===================================================================== */
+.glass {
+  --mx: 50%;
+  --my: 0%;
+  position: relative;
+  isolation: isolate;
+  border-radius: var(--radius-card);
+  border: 1px solid rgb(var(--glass-border) / 0.18);
+  transition:
+    transform var(--dur-base) var(--ease-out-expo),
+    border-color var(--dur-base) var(--ease-out-expo);
+}
+
+.glass--clear {
+  background: transparent; /* 100% shaffof — video fon to'liq ko'rinadi */
+}
+
+.glass--frosted {
+  background: rgb(var(--glass-bg) / var(--glass-alpha-soft));
+  backdrop-filter: blur(24px) saturate(1.6);
+  -webkit-backdrop-filter: blur(24px) saturate(1.6);
+}
+
+/* Yuqori chekkadagi yorug' chiziq */
+.glass::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 1px;
+  border-top-left-radius: inherit;
+  border-top-right-radius: inherit;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgb(var(--glow) / 0.9),
+    transparent
+  );
+  z-index: 2;
+}
+
+/* Orqadagi nur — hover'da kuchayadi */
+.glass::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  z-index: -1;
+  background: radial-gradient(
+    60% 80% at 50% 0%,
+    rgb(var(--glow) / 0.28),
+    transparent 70%
+  );
+  opacity: 0.55;
+  transition: opacity var(--dur-base) var(--ease-out-expo);
+}
+
+.glass:hover::after {
+  opacity: 1;
+}
+
+.glass:hover {
+  border-color: rgb(var(--glass-border) / 0.32);
+}
+
+/* Kursor spotlight qatlami — kartaga clip qilingan */
+.glass__spot {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  overflow: hidden;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--dur-base) var(--ease-out-expo);
+}
+
+.glass__spot::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    18rem 18rem at var(--mx) var(--my),
+    rgb(var(--glow) / 0.16),
+    transparent 60%
+  );
+}
+
+.glass:hover .glass__spot {
+  opacity: 1;
+}
+
+.glass__content {
+  position: relative;
+  z-index: 1;
+}
+
+/* prefers-reduced-motion — hover harakati sokinlashadi (CLAUDE.md §4.1) */
+@media (prefers-reduced-motion: reduce) {
+  .glass,
+  .glass::after,
+  .glass__spot {
+    transition-duration: 150ms;
+  }
+}

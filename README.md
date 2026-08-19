@@ -1,91 +1,96 @@
-# Qo'qon Universiteti — Tashkiliy tuzilma (Backend)
+# Imora AI — Landing Experience
 
-Node.js + Express backend. Ma'lumotlar **serverda** saqlanadi (`data.json`), shuning uchun
-barcha tashrifchilar bir xil kontentni ko'radi va admin istalgan qurilmadan tahrirlashi mumkin.
+President AI Tournament uchun rasmiy landing/tajriba sayti. **Next.js 15 (App Router)
++ TypeScript strict + Tailwind CSS v4** ustida qurilgan; keyingi bosqichlarda GSAP + Lenis
+motion, preloader, video fon va React Three Fiber 3D sahna qo'shiladi.
 
-## Tarkib
-```
-server.js            # Express server + API
-package.json         # bog'liqlik: express
-default-data.json    # birinchi ishga tushishdagi standart tuzilma (seed)
-.env.example         # sozlamalar namunasi
-public/
-  index.html         # sayt (frontend)
-  assets/
-    bg.mp4           # fon videosi
-    logo.png         # oq KU logotipi
-    mark.png         # favicon
-data.json            # (avtomatik yaratiladi) — real ma'lumotlar shu yerda
-```
+Loyihaning to'liq "konstitutsiyasi" — [`CLAUDE.md`](./CLAUDE.md).
 
-## 1) Lokal ishga tushirish
+## Hozirgi holat — Bosqich 1 (Poydevor)
+
+- ✅ Next.js 15 + TS strict + Tailwind v4, App Router, `src/` katalog
+- ✅ Dizayn token'lari (`src/styles/tokens.css`) — kun/tun rejimi, type scale, motion
+- ✅ Shriftlar `next/font/google` orqali: Oswald, Archivo, Inter Tight, JetBrains Mono
+- ✅ Tema tizimi: `useTheme` + `ThemeToggle` (FOUC'siz, `role="switch"`)
+- ✅ `GlassCard` — `clear` / `frosted`, kursor spotlight, glow-line
+- ✅ `/playground` — barcha token, tipografika, shrift va shisha kartalar namunasi
+- ⏳ Keyingi: motion poydevori → preloader → video/hero → 3D → bo'limlar → admin/i18n
+
+## Ishga tushirish
+
 ```bash
 npm install
-npm start
+npm run dev      # http://localhost:3000  (va /playground)
 ```
-Brauzerda oching: **http://localhost:3000**
 
-Standart admin paroli: `kokand2026`
-Adminga kirish (saytda ochiq tugma yo'q — yashirin):
-- Logotipni **5 marta** ketma-ket bosing, yoki
-- URL oxiriga `#admin` qo'shing (`http://localhost:3000/#admin`), yoki
-- **Ctrl + Shift + A** (Mac'da ⌘ + Shift + A)
+Ishlab chiqarish uchun:
 
-## 2) Parol va maxfiy kalitni o'zgartirish
-`.env.example` faylidan nusxa oling:
 ```bash
-cp .env.example .env
+npm run build
+npm run start
 ```
-So'ng `.env` ichida `ADMIN_PASSWORD` va `JWT_SECRET` ni o'zgartiring.
-(Hosting panellarida ham shu "Environment Variables" bo'limiga yoziladi.)
 
-| O'zgaruvchi     | Vazifasi                                  |
-|-----------------|-------------------------------------------|
-| `ADMIN_PASSWORD`| Admin paroli                              |
-| `JWT_SECRET`    | Token imzo kaliti (uzun tasodifiy satr)   |
-| `PORT`          | Port (ko'p hostinglar avtomatik beradi)   |
-| `DATA_FILE`     | Ma'lumot fayli joyi (ixtiyoriy)           |
+## Skriptlar
 
-## 3) Ishlash tartibi (API)
-| Metod  | Yo'l           | Kim         | Vazifasi                          |
-|--------|----------------|-------------|-----------------------------------|
-| GET    | `/api/data`    | hamma       | Butun tuzilmani o'qish            |
-| POST   | `/api/login`   | hamma       | Parol -> token (30 kun)           |
-| PUT    | `/api/data`    | admin token | Butun tuzilmani saqlash           |
-| POST   | `/api/reset`   | admin token | Standart tuzilmaga qaytarish      |
-| GET    | `/api/verify`  | admin token | Tokenni tekshirish                |
+| Skript | Vazifasi |
+|---|---|
+| `npm run dev` | Development server |
+| `npm run build` | Production build (`output: 'standalone'`) |
+| `npm run start` | Build'ni ishga tushirish |
+| `npm run lint` | ESLint (`next/core-web-vitals` + `next/typescript`) |
+| `npm run typecheck` | `tsc --noEmit` |
 
-Rasmlar hozircha tuzilma ichida (base64) saqlanadi — alohida sozlash shart emas.
+## Fayl strukturasi
 
-## 4) Deploy variantlari
-
-### Replit (eng oson)
-1. Loyihani yuklang (yoki GitHub'dan import qiling).
-2. "Secrets" bo'limiga `ADMIN_PASSWORD` va `JWT_SECRET` ni qo'shing.
-3. Run tugmasini bosing. Replit avtomatik URL beradi.
-
-### Render / Railway
-1. GitHub repoga yuklang.
-2. Yangi **Web Service** yarating.
-   - Build: `npm install`
-   - Start: `npm start`
-3. Environment'ga `ADMIN_PASSWORD`, `JWT_SECRET` qo'shing.
-4. **Muhim:** `data.json` saqlanib qolishi uchun **doimiy disk (Persistent Disk)** ulang
-   va `DATA_FILE=/data/ku.json` deб ko'rsating (aks holda qayta deploy'da ma'lumot o'chadi).
-
-### O'z serveringiz (VPS)
-```bash
-npm install
-npm install -g pm2
-ADMIN_PASSWORD=... JWT_SECRET=... pm2 start server.js --name ku-tuzilma
-pm2 save
 ```
-Old tomonda Nginx bilan domen/HTTPS ulash tavsiya etiladi.
+src/
+  app/
+    layout.tsx        # root layout + shriftlar + FOUC'siz tema skripti
+    page.tsx          # bosh sahifa (poydevor holati)
+    playground/       # dizayn tizimi namoyishi
+    globals.css       # tailwind + token/glass/typography/components importlari
+    icon.svg          # favicon (brand mark)
+  components/ui/       # GlassCard, ThemeToggle, SiteHeader
+  hooks/               # useTheme
+  lib/                 # fonts.ts, cn.ts
+  store/               # theme.ts (zustand)
+  styles/              # tokens.css, typography.css, glass.css, components.css
+public/brand/          # logo-mark.svg, logo-full.svg (placeholder)
+```
 
-## 5) Zaxira nusxa
-Admin panel → **Sozlama → Eksport** orqali butun tuzilmani JSON qilib saqlaysiz.
-Kerak bo'lsa **Import** orqali qaytarasiz. Server tomonda esa `data.json` faylini ko'chirib qo'yish yetarli.
+## Asset'lar
 
----
-Muhim eslatma: sayt to'liq JavaScript-app bo'lgan kokanduni.uz'dan a'zolar rasmini avtomatik
-olishning imkoni yo'q. A'zolar rasm/ma'lumotini admin paneldan qo'shasiz — endi ular serverda saqlanadi.
+Asset manifest — `CLAUDE.md §2`. Fayl bo'lmasa placeholder ishlatiladi.
+
+- `public/brand/logo-mark.svg`, `public/brand/logo-full.svg` — **VAQTINCHALIK placeholder**.
+  Yuborilgan yurak+qo'llar dizayni asosida qayta chizilgan. Haqiqiy vektor asset kelganda
+  shu fayllarni almashtiring.
+- `logo-part-01.svg … logo-part-NN.svg` (preloader yig'ilish bo'laklari), video, audio,
+  `.glb` model — keyingi bosqichlarda kerak bo'ladi.
+
+## Tema
+
+`data-theme="day"` (sayoz suv / yorug') va `data-theme="night"` (chuqur suv / qorong'i).
+Tanlov `localStorage['imora-theme']` da faqat UI preference sifatida saqlanadi; birinchi
+paint'dan oldin inline skript to'g'ri temani qo'yadi (FOUC yo'q).
+
+## ⚠️ Brand rang ziddiyati (tasdiq kerak)
+
+Master prompt brand-core sifatida **violet (#36255C) + lavender (#D2C3F6)** ni belgilaydi
+va `tokens.css` shunga amal qiladi. Ammo yuborilgan logotip **ko'k + teal**. Qaysi biri
+yakuniy brand ekanini tasdiqlang — token'lar bitta faylda, oson almashtiriladi.
+
+## Deploy
+
+`next.config.ts` da `output: 'standalone'` — Vercel yoki Docker bilan ZIP sifatida
+topshiriladi. Docker uchun `.next/standalone` chiqindisidan foydalaning.
+
+## Uchinchi tomon litsenziyalari
+
+- Shriftlar (Oswald, Archivo, Inter Tight, JetBrains Mono) — SIL Open Font License (OFL), bepul.
+- Barcha kutubxonalar npm orqali (MIT va shunga o'xshash ochiq litsenziyalar).
+
+## Eslatma
+
+Avvalgi "Qo'qon Universiteti — Tuzilma" backend kodi `legacy-kokand/` papkasida saqlangan
+(bu loyiha bilan bog'liq emas, tarixiy nusxa).

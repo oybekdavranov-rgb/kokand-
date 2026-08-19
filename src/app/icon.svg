@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Imora AI">
+  <defs>
+    <linearGradient id="ic" x1="18" y1="40" x2="238" y2="210" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1e5bff"/>
+      <stop offset="0.5" stop-color="#1aa0e6"/>
+      <stop offset="1" stop-color="#22e3c7"/>
+    </linearGradient>
+  </defs>
+  <path fill="url(#ic)" d="M128 226C56 176 20 135 20 92 20 59 44 37 74 37 100 37 118 54 128 75 138 54 156 37 182 37 212 37 236 59 236 92 236 135 200 176 128 226Z"/>
+  <g fill="#f3f7ff">
+    <g transform="translate(96 150) rotate(-15) scale(0.6)">
+      <rect x="-58" y="21" width="64" height="28" rx="14"/>
+      <rect x="-6" y="8" width="50" height="56" rx="19"/>
+      <rect x="38" y="16" width="48" height="14" rx="7"/>
+      <rect x="38" y="33" width="44" height="14" rx="7"/>
+    </g>
+    <g transform="translate(158 108) rotate(9) scale(-0.6 0.6)">
+      <rect x="-58" y="21" width="64" height="28" rx="14"/>
+      <rect x="-6" y="8" width="50" height="56" rx="19"/>
+      <rect x="38" y="16" width="48" height="14" rx="7"/>
+      <rect x="38" y="33" width="44" height="14" rx="7"/>
+    </g>
+  </g>
+</svg>

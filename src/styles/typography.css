@@ -1,0 +1,65 @@
+/* =====================================================================
+   IMORA AI — TIPOGRAFIKA  (CLAUDE.md §3.2)
+   Qoida: "ikki shrift bitta jumlada". Har katta sarlavhada kamida
+   ikkita shrift/width aralashadi (landonorris.com uslubi).
+   ===================================================================== */
+
+/* Shrift yordamchi klasslari */
+.f-oswald {
+  font-family: var(--font-display);
+}
+.f-archivo {
+  font-family: var(--font-expand);
+}
+.f-body {
+  font-family: var(--font-body);
+}
+.f-mono {
+  font-family: var(--font-mono);
+}
+
+.f-archivo-expanded {
+  font-family: var(--font-expand);
+  font-stretch: 125%;
+  font-variation-settings: "wdth" 125;
+}
+
+/* Display sarlavha — Oswald asosi */
+.display {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: -0.02em;
+  line-height: 0.86;
+  color: var(--ink);
+}
+
+.display .f-archivo-expanded {
+  text-transform: none;
+  letter-spacing: -0.01em;
+}
+
+/* Body matn */
+.prose-body {
+  font-family: var(--font-body);
+  line-height: 1.55;
+  max-width: 68ch;
+  color: var(--ink-muted);
+}
+
+/* Raqam, label, counter, badge — JetBrains Mono */
+.label-mono {
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: var(--step--1);
+  color: var(--ink-faint);
+}
+
+/* Type scale yordamchilari */
+.t--1 { font-size: var(--step--1); }
+.t-0  { font-size: var(--step-0); }
+.t-1  { font-size: var(--step-1); }
+.t-2  { font-size: var(--step-2); }
+.t-3  { font-size: var(--step-3); }
+.t-4  { font-size: var(--step-4); }
+.t-5  { font-size: var(--step-5); }

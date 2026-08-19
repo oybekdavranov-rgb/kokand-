@@ -1,0 +1,83 @@
+/* =====================================================================
+   IMORA AI — DESIGN TOKENS  (CLAUDE.md §3)
+   Ranglar KODDA hech qachon to'g'ridan-to'g'ri hex bilan yozilmaydi —
+   faqat shu o'zgaruvchilar orqali. Font oilalari next/font/google
+   generatsiya qilgan CSS o'zgaruvchilarga (--font-*) ishora qiladi.
+   ===================================================================== */
+:root {
+  /* --- BRAND CORE (o'zgarmas) --- */
+  --brand-violet: #36255c; /* rgb(54,37,92)    */
+  --brand-lavender: #d2c3f6; /* rgb(210,195,246) */
+
+  /* --- TIPOGRAFIYA (oilalar next/font orqali ulanadi) --- */
+  --font-display: var(--font-oswald), "Arial Narrow", sans-serif;
+  --font-expand: var(--font-archivo), "Helvetica Neue", sans-serif;
+  --font-body: var(--font-inter-tight), system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, monospace;
+
+  /* Type scale — 1.333 (Perfect Fourth), clamp bilan fluid */
+  --step--1: clamp(0.78rem, 0.75rem + 0.15vw, 0.88rem);
+  --step-0: clamp(1rem, 0.95rem + 0.25vw, 1.13rem);
+  --step-1: clamp(1.33rem, 1.2rem + 0.65vw, 1.75rem);
+  --step-2: clamp(1.78rem, 1.5rem + 1.4vw, 2.8rem);
+  --step-3: clamp(2.37rem, 1.8rem + 2.85vw, 4.5rem);
+  --step-4: clamp(3.16rem, 2rem + 5.8vw, 7.2rem);
+  --step-5: clamp(4.21rem, 2rem + 11vw, 12rem); /* hero display */
+
+  /* --- LAYOUT --- */
+  --gutter: clamp(1rem, 4vw, 3rem);
+  --max-w: 1440px;
+  --radius-card: 20px;
+  --radius-pill: 999px;
+
+  /* --- MOTION --- */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out-q: cubic-bezier(0.76, 0, 0.24, 1);
+  --dur-fast: 240ms;
+  --dur-base: 600ms;
+  --dur-slow: 1200ms;
+}
+
+/* ================= KUNDUZGI REJIM ================= */
+[data-theme="day"] {
+  --bg: #f2effa; /* violet hue'dan olingan yorug' fon */
+  --bg-deep: #e6e0f4;
+  --ink: #36255c; /* asosiy matn — BRAND VIOLET */
+  --ink-muted: #5b4a87;
+  --ink-faint: #8b7cb0;
+  --accent: #6d4fd1;
+  --glow: 210 195 246; /* lavender, rgb space-separated */
+  --glass-bg: 255 255 255;
+  --glass-alpha-full: 0; /* 100% shaffof kartalar */
+  --glass-alpha-soft: 0.42; /* qisman shaffof kartalar */
+  --glass-border: 54 37 92;
+  --video-overlay: linear-gradient(
+    180deg,
+    rgba(242, 239, 250, 0.25) 0%,
+    rgba(242, 239, 250, 0.82) 100%
+  );
+  --video-filter: saturate(1.05) brightness(1.08);
+  color-scheme: light;
+}
+
+/* ================= TUNGI REJIM ================= */
+[data-theme="night"] {
+  --bg: #0b0714;
+  --bg-deep: #150e24;
+  --ink: #d2c3f6; /* asosiy matn — BRAND LAVENDER */
+  --ink-muted: #a292cf;
+  --ink-faint: #6b5c94;
+  --accent: #d2c3f6;
+  --glow: 210 195 246;
+  --glass-bg: 54 37 92; /* violet asosli shisha */
+  --glass-alpha-full: 0;
+  --glass-alpha-soft: 0.34;
+  --glass-border: 210 195 246;
+  --video-overlay: linear-gradient(
+    180deg,
+    rgba(11, 7, 20, 0.3) 0%,
+    rgba(11, 7, 20, 0.88) 100%
+  );
+  --video-filter: saturate(1.15) brightness(0.92) contrast(1.05);
+  color-scheme: dark;
+}

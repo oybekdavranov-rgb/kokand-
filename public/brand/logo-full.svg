@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 256" role="img" aria-label="Imora AI">
+  <!--
+    IMORA AI — logo-full (VAQTINCHALIK PLACEHOLDER): belgi + wordmark.
+    Wordmark tizim shriftida — haqiqiy brand shrift/asset kelganda almashtiriladi.
+  -->
+  <defs>
+    <linearGradient id="hFull" x1="18" y1="40" x2="238" y2="210" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1e5bff"/>
+      <stop offset="0.5" stop-color="#1aa0e6"/>
+      <stop offset="1" stop-color="#22e3c7"/>
+    </linearGradient>
+    <linearGradient id="wFull" x1="60" y1="60" x2="196" y2="196" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#123a9e"/>
+      <stop offset="1" stop-color="#0f7fae"/>
+    </linearGradient>
+    <linearGradient id="txtFull" x1="300" y1="90" x2="740" y2="170" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1e5bff"/>
+      <stop offset="1" stop-color="#22e3c7"/>
+    </linearGradient>
+  </defs>
+
+  <g>
+    <path fill="url(#hFull)" d="M128 226C56 176 20 135 20 92 20 59 44 37 74 37 100 37 118 54 128 75 138 54 156 37 182 37 212 37 236 59 236 92 236 135 200 176 128 226Z"/>
+    <path fill="url(#wFull)" d="M128 202C70 162 42 129 42 95 42 71 59 56 80 56 101 56 117 70 128 90 139 70 155 56 176 56 197 56 214 71 214 95 214 129 186 162 128 202Z"/>
+    <g fill="#f3f7ff">
+      <g transform="translate(96 150) rotate(-15) scale(0.6)">
+        <rect x="-64" y="21" width="70" height="28" rx="14"/>
+        <rect x="-6" y="8" width="50" height="56" rx="19"/>
+        <rect x="38" y="11" width="47" height="12" rx="6"/>
+        <rect x="38" y="24" width="52" height="12" rx="6"/>
+        <rect x="38" y="37" width="48" height="12" rx="6"/>
+        <rect x="38" y="50" width="40" height="12" rx="6"/>
+        <rect x="0" y="-8" width="17" height="36" rx="8" transform="rotate(-30 8 18)"/>
+      </g>
+      <g transform="translate(160 106) rotate(9) scale(-0.6 0.6)">
+        <rect x="-64" y="21" width="70" height="28" rx="14"/>
+        <rect x="-6" y="8" width="50" height="56" rx="19"/>
+        <rect x="38" y="11" width="47" height="12" rx="6"/>
+        <rect x="38" y="24" width="52" height="12" rx="6"/>
+        <rect x="38" y="37" width="48" height="12" rx="6"/>
+        <rect x="38" y="50" width="40" height="12" rx="6"/>
+        <rect x="0" y="-8" width="17" height="36" rx="8" transform="rotate(-30 8 18)"/>
+      </g>
+    </g>
+  </g>
+
+  <text x="286" y="158" fill="url(#txtFull)"
+        font-family="'Arial Narrow', Oswald, system-ui, sans-serif"
+        font-size="112" font-weight="700" letter-spacing="-2">IMORA</text>
+  <text x="668" y="158" fill="#22e3c7"
+        font-family="'Arial Narrow', Oswald, system-ui, sans-serif"
+        font-size="112" font-weight="700" letter-spacing="-2">AI</text>
+</svg>
