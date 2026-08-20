@@ -1,18 +1,20 @@
 /* =====================================================================
    IMORA AI — DESIGN TOKENS  (CLAUDE.md §3)
+   Brend: sun'iy intellekt bilan ISHORA TILI o'rganish va muloqot.
+   Rang yo'nalishi logotipdan olingan: ko'k → teal (accessibility, ishonch).
    Ranglar KODDA hech qachon to'g'ridan-to'g'ri hex bilan yozilmaydi —
    faqat shu o'zgaruvchilar orqali. Font oilalari next/font/google
    generatsiya qilgan CSS o'zgaruvchilarga (--font-*) ishora qiladi.
    ===================================================================== */
 :root {
-  /* --- BRAND CORE (o'zgarmas) --- */
-  --brand-violet: #36255c; /* rgb(54,37,92)    */
-  --brand-lavender: #d2c3f6; /* rgb(210,195,246) */
+  /* --- BRAND CORE (logotipdan) --- */
+  --brand-blue: #1e5bff; /* chuqur ko'k */
+  --brand-teal: #22e3c7; /* teal aksent */
 
   /* --- TIPOGRAFIYA (oilalar next/font orqali ulanadi) --- */
   --font-display: var(--font-oswald), "Arial Narrow", sans-serif;
   --font-expand: var(--font-archivo), "Helvetica Neue", sans-serif;
-  --font-body: var(--font-inter-tight), system-ui, sans-serif;
+  --font-body: var(--font-inter), system-ui, sans-serif;
   --font-mono: var(--font-jetbrains), ui-monospace, monospace;
 
   /* Type scale — 1.333 (Perfect Fourth), clamp bilan fluid */
@@ -38,46 +40,46 @@
   --dur-slow: 1200ms;
 }
 
-/* ================= KUNDUZGI REJIM ================= */
+/* ================= KUNDUZGI REJIM (yorug') ================= */
 [data-theme="day"] {
-  --bg: #f2effa; /* violet hue'dan olingan yorug' fon */
-  --bg-deep: #e6e0f4;
-  --ink: #36255c; /* asosiy matn — BRAND VIOLET */
-  --ink-muted: #5b4a87;
-  --ink-faint: #8b7cb0;
-  --accent: #6d4fd1;
-  --glow: 210 195 246; /* lavender, rgb space-separated */
+  --bg: #eef4ff; /* ko'k hue'dan olingan yorug' fon */
+  --bg-deep: #deeaff;
+  --ink: #06182e; /* asosiy matn — deep navy */
+  --ink-muted: #33507a;
+  --ink-faint: #7089ae;
+  --accent: #0e63e6; /* ko'k aksent */
+  --glow: 34 227 199; /* teal, rgb space-separated */
   --glass-bg: 255 255 255;
   --glass-alpha-full: 0; /* 100% shaffof kartalar */
   --glass-alpha-soft: 0.42; /* qisman shaffof kartalar */
-  --glass-border: 54 37 92;
+  --glass-border: 6 24 46;
   --video-overlay: linear-gradient(
     180deg,
-    rgba(242, 239, 250, 0.25) 0%,
-    rgba(242, 239, 250, 0.82) 100%
+    rgba(238, 244, 255, 0.2) 0%,
+    rgba(238, 244, 255, 0.82) 100%
   );
-  --video-filter: saturate(1.05) brightness(1.08);
+  --video-filter: saturate(1.05) brightness(1.06);
   color-scheme: light;
 }
 
-/* ================= TUNGI REJIM ================= */
+/* ================= TUNGI REJIM (qorong'i) ================= */
 [data-theme="night"] {
-  --bg: #0b0714;
-  --bg-deep: #150e24;
-  --ink: #d2c3f6; /* asosiy matn — BRAND LAVENDER */
-  --ink-muted: #a292cf;
-  --ink-faint: #6b5c94;
-  --accent: #d2c3f6;
-  --glow: 210 195 246;
-  --glass-bg: 54 37 92; /* violet asosli shisha */
+  --bg: #04070e;
+  --bg-deep: #0a1220;
+  --ink: #eaf3ff; /* asosiy matn — deyarli oq */
+  --ink-muted: #9fb6d6;
+  --ink-faint: #5c7498;
+  --accent: #22e3c7; /* teal aksent */
+  --glow: 34 227 199;
+  --glass-bg: 16 34 62; /* navy asosli shisha */
   --glass-alpha-full: 0;
   --glass-alpha-soft: 0.34;
-  --glass-border: 210 195 246;
+  --glass-border: 120 205 225;
   --video-overlay: linear-gradient(
     180deg,
-    rgba(11, 7, 20, 0.3) 0%,
-    rgba(11, 7, 20, 0.88) 100%
+    rgba(4, 7, 14, 0.28) 0%,
+    rgba(4, 7, 14, 0.88) 100%
   );
-  --video-filter: saturate(1.15) brightness(0.92) contrast(1.05);
+  --video-filter: saturate(1.12) brightness(0.95) contrast(1.03);
   color-scheme: dark;
 }

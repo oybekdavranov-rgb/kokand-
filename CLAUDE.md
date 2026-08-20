@@ -161,15 +161,28 @@ tashrif hisoblagichi · `/admin` qobiq · reduced-motion · Lighthouse (Perf≥8
 
 ---
 
+## ⚡ LOYIHA YO'NALISHI (master promtdan ustun — foydalanuvchi tasdiqladi)
+
+Taqdimot (Imora_AI PDF) asosida aniqlandi:
+- **Imora AI = ishora tili (sign language) o'rganish platformasi**: sun'iy intellekt +
+  3D avatar + jonli video muloqot. Auditoriya: kar va soqov insonlar, ularning yaqinlari,
+  mustaqil o'rganuvchilar. Shior: *"hech kim muloqotdan chetda qolmasin."*
+- **Brand rang = ko'k → teal** (logotipdan). ❌ Violet/lavender va ❌ "meduza/chuqur suv"
+  metaforasi TASHLANDI. `tokens.css` endi ko'k/teal.
+- **Tipografika + animatsiya + effektlar referens = https://landonorris.com/** (ulkan
+  condensed display, so'z-so'z reveal, silliq scroll, aksent so'zlar).
+- **Orqafon video:** admin paneldan MP4 yuklash YOKI YouTube URL orqali (keyingi bosqich).
+- **Kontakt bo'limi = landonorris footer** uslubida; markazda **3D robot** (hozircha logotip
+  placeholder), chapda SAHIFALAR, o'ngda IJTIMOIY, pastda "hamkorlik/taklif" tugmasi.
+- Kontent manbai: `src/content/imora.ts` (PDF'dagi UZ matn).
+
 ## HOLAT (progress)
 
-- ✅ **Bosqich 1 — Poydevor:** Next.js 15 + TS strict + Tailwind v4 (App Router, src/),
-  barcha paketlar, `tokens.css`, shriftlar (`next/font`), `useTheme` + `ThemeToggle`
-  (FOUC'siz), `GlassCard` (clear/frosted + spotlight + glow-line), `/playground`.
-  Brand mark placeholder: `public/brand/logo-mark.svg`, `logo-full.svg` (haqiqiy asset kutilmoqda).
-- ⏳ Bosqich 2 — Motion poydevori (Lenis + GSAP ScrollTrigger)
-- ⏳ Bosqich 3 — Preloader · 4 — Video/Hero · 5 — 3D · 6 — bo'limlar · 7 — Community/Social · 8 — Admin/i18n/polish
-
-> ⚠️ **Brand rang ziddiyati (hal qilinishi kerak):** master prompt brand-core sifatida
-> **violet + lavender** ni belgilaydi va tokens.css shunga amal qiladi. Ammo yuborilgan
-> logotip **ko'k + teal**. Foydalanuvchi qaysi biri yakuniy ekanini tasdiqlashi kerak.
+- ✅ **Bosqich 1 — Poydevor:** Next.js 15 + TS strict + Tailwind v4, `tokens.css`, shriftlar,
+  `useTheme` + `ThemeToggle` (FOUC'siz), `GlassCard`, `/playground`.
+- ✅ **Bosqich 2 — Rebrand + Motion + Scrollytelling:** ko'k/teal palitra; Lenis silliq
+  scroll + GSAP ScrollTrigger; `SplitHeading` (so'z-so'z reveal) + `Reveal`;
+  `useReducedMotion`; bosh sahifa to'liq PDF kontenti bilan (Hero, Muammo, Yechim,
+  Imkoniyatlar, Kimlar uchun, Texnologiyalar, Afzalliklar, Kelajak, Kontakt).
+- ⏳ **Keyingi:** orqafon video (admin MP4 / YouTube) → admin panel → 3D robot (kontaktda) →
+  preloader → i18n (uz/en) → community/social → polish/Lighthouse.

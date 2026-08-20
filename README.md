@@ -74,11 +74,18 @@ Asset manifest — `CLAUDE.md §2`. Fayl bo'lmasa placeholder ishlatiladi.
 Tanlov `localStorage['imora-theme']` da faqat UI preference sifatida saqlanadi; birinchi
 paint'dan oldin inline skript to'g'ri temani qo'yadi (FOUC yo'q).
 
-## ⚠️ Brand rang ziddiyati (tasdiq kerak)
+## Imora AI nima?
 
-Master prompt brand-core sifatida **violet (#36255C) + lavender (#D2C3F6)** ni belgilaydi
-va `tokens.css` shunga amal qiladi. Ammo yuborilgan logotip **ko'k + teal**. Qaysi biri
-yakuniy brand ekanini tasdiqlang — token'lar bitta faylda, oson almashtiriladi.
+Sun'iy intellekt bilan **ishora tili (sign language)** o'rganish va muloqot platformasi:
+AI chat (Gemini) + 3D avatar + jonli video muloqot. Kar va soqov insonlar, ularning
+yaqinlari va mustaqil o'rganuvchilar uchun. Shior: *"hech kim muloqotdan chetda qolmasin."*
+Kontent `src/content/imora.ts` da (taqdimotdan).
+
+## Brand va uslub
+
+- Rang: **ko'k → teal** (logotipdan) — accessibility/ishonch. `tokens.css` da, kun/tun rejimi.
+- Tipografika + animatsiya + effektlar referensi: **landonorris.com** (condensed display,
+  so'z-so'z reveal, silliq scroll). Motion: Lenis + GSAP (`prefers-reduced-motion` hurmat qilinadi).
 
 ## Deploy
 

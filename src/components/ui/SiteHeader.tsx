@@ -25,11 +25,14 @@ export function SiteHeader() {
       </Link>
 
       <nav className="site-header__nav" aria-label="Asosiy">
-        <Link href="/" className="nav-link">
-          Bosh
+        <Link href="/#features" className="nav-link nav-link--hide-sm">
+          Imkoniyatlar
         </Link>
-        <Link href="/playground" className="nav-link">
-          Playground
+        <Link href="/#tech" className="nav-link nav-link--hide-sm">
+          Texnologiyalar
+        </Link>
+        <Link href="/#contact" className="nav-link">
+          Aloqa
         </Link>
         <ThemeToggle />
       </nav>

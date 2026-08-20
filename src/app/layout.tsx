@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { fontVariables } from "@/lib/fonts";
 import { DEFAULT_THEME } from "@/store/theme";
+import { SmoothScroll } from "@/components/motion/SmoothScroll";
 
 export const metadata: Metadata = {
   title: {
@@ -45,7 +46,7 @@ export default function RootLayout({
           Asosiy kontentga o&apos;tish
         </a>
         <div className="ambient" aria-hidden="true" />
-        {children}
+        <SmoothScroll>{children}</SmoothScroll>
       </body>
     </html>
   );
