@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Meduza foni — demo</title>
+  <style>
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: transparent;              /* meduza ko'rinishi uchun shaffof */
+      color: #eaf6ff;
+      font-family: system-ui, "Segoe UI", Roboto, Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    .wrap { position: relative; z-index: 1; }  /* kontent canvas tepasida */
+
+    section {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 8vh 6vw;
+    }
+    .hero h1 {
+      font-size: clamp(2rem, 7vw, 5rem);
+      margin: 0 0 .4em;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      background: linear-gradient(180deg, #ffffff, #7fd8ff);
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+      text-shadow: 0 0 40px rgba(90,200,255,.25);
+    }
+    .hero p { font-size: clamp(1rem, 2.4vw, 1.35rem); color: #b9d6ea; max-width: 40ch; }
+    .hint {
+      margin-top: 3rem; font-size: .95rem; color: #8fb6cf;
+      display: inline-flex; align-items: center; gap: .5rem;
+      animation: bob 1.8s ease-in-out infinite;
+    }
+    @keyframes bob { 0%,100%{ transform: translateY(0) } 50%{ transform: translateY(8px) } }
+
+    .card {
+      max-width: 640px;
+      background: rgba(8, 20, 40, 0.45);
+      border: 1px solid rgba(120, 200, 255, 0.18);
+      border-radius: 20px;
+      padding: 2.2rem 2rem;
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      box-shadow: 0 20px 60px rgba(0,0,0,.35);
+    }
+    .card h2 { margin-top: 0; font-size: clamp(1.4rem, 4vw, 2.2rem); color: #cdeaff; }
+    .card p { color: #c3d9e8; line-height: 1.65; }
+    .tag {
+      display: inline-block; font-size: .8rem; letter-spacing: .12em; text-transform: uppercase;
+      color: #7fd8ff; border: 1px solid rgba(120,200,255,.35); border-radius: 999px;
+      padding: .3rem .8rem; margin-bottom: 1rem;
+    }
+    footer { padding: 6vh 6vw; text-align: center; color: #6f93ab; font-size: .9rem; }
+  </style>
+
+  <!-- Sozlash (ixtiyoriy) -->
+  <script>
+    window.JELLYFISH_CONFIG = { zIndex: -1, background: true, quality: 1 };
+  </script>
+</head>
+<body>
+  <div class="wrap">
+    <section class="hero">
+      <h1>Bioluminessent meduza</h1>
+      <p>Qorong'i okean fonida suzuvchi meduza. Sahifani pastga aylantiring — meduza siz bilan birga harakatlanadi.</p>
+      <div class="hint">↓ Scroll qiling</div>
+    </section>
+
+    <section>
+      <div class="card">
+        <span class="tag">Scroll animatsiya</span>
+        <h2>Aylantirsangiz — suzadi</h2>
+        <p>Meduzaning vertikal joylashuvi sahifadagi scroll darajasiga bog'langan. Tez aylantirsangiz pulslar tezlashadi — go'yo suvni itarib suzayotgandek.</p>
+      </div>
+    </section>
+
+    <section>
+      <div class="card">
+        <span class="tag">Parallaks</span>
+        <h2>Uch qatlam chuqurlik</h2>
+        <p>Old plandagi yirik meduza va orqadagi ikki kichik meduza turli tezlikda siljiydi — bu chuqurlik hissini beradi. Sichqonchani harakatlantirsangiz ham yumshoq egiladi.</p>
+      </div>
+    </section>
+
+    <section>
+      <div class="card">
+        <span class="tag">Ulash</span>
+        <h2>Bitta qator bilan qo'shiladi</h2>
+        <p>Saytingiz <code>index.html</code> ichiga <code>&lt;script src="/jellyfish.js"&gt;&lt;/script&gt;</code> qatorini qo'shsangiz kifoya. Fon avtomatik chiziladi.</p>
+      </div>
+    </section>
+
+    <footer>Qo'qon Universiteti — meduza fon effekti · demo</footer>
+  </div>
+
+  <!-- Meduza foni -->
+  <script src="/jellyfish.js"></script>
+</body>
+</html>
