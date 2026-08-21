@@ -89,68 +89,12 @@ a{color:inherit;text-decoration:none}
   perspective:1400px;
 }
 
-/* ---- ocean background ---- */
-.ocean{position:absolute;inset:0;z-index:0}
-.ocean__base{
-  position:absolute;inset:0;
-  background:
-    radial-gradient(120% 80% at 50% -10%, #123a66 0%, #0b2350 26%, #071736 52%, #050d22 74%, #03060f 100%);
-}
-.ocean__rays{
-  position:absolute;inset:-20% -20% auto -20%;height:130%;
-  background:
-    linear-gradient(180deg, rgba(120,200,255,.16), rgba(120,200,255,0) 62%);
-  mix-blend-mode:screen;pointer-events:none;
-}
-.ocean__rays::before,.ocean__rays::after{
-  content:'';position:absolute;inset:0;
-  background:repeating-linear-gradient(78deg,
-    rgba(140,215,255,0) 0 40px,
-    rgba(140,215,255,.05) 46px,
-    rgba(140,215,255,.10) 52px,
-    rgba(140,215,255,0) 90px);
-  mix-blend-mode:screen;transform-origin:top center;
-  animation:sway 14s ease-in-out infinite alternate;
-}
-.ocean__rays::after{animation-duration:22s;animation-direction:alternate-reverse;opacity:.7}
-@keyframes sway{from{transform:skewX(-6deg) translateX(-3%)}to{transform:skewX(7deg) translateX(4%)}}
-.ocean__caustics{
-  position:absolute;inset:0;mix-blend-mode:soft-light;opacity:.5;
-  background:
-    radial-gradient(50% 40% at 22% 18%, rgba(80,230,255,.5), transparent 60%),
-    radial-gradient(45% 45% at 78% 30%, rgba(140,80,255,.42), transparent 62%),
-    radial-gradient(60% 50% at 50% 90%, rgba(20,120,180,.4), transparent 64%);
-  animation:caustics 24s ease-in-out infinite alternate;
-}
-@keyframes caustics{from{transform:translate3d(-2%,-1%,0) scale(1.05)}to{transform:translate3d(3%,2%,0) scale(1.12)}}
-.ocean__depth{position:absolute;inset:0;background:radial-gradient(120% 100% at 50% 120%,#02040c 0%,rgba(2,4,12,0) 60%);opacity:calc(.25 + var(--p)*.6)}
-.ocean__vignette{position:absolute;inset:0;box-shadow:inset 0 0 220px 60px rgba(2,5,14,.9);pointer-events:none}
-
-/* ---- bubbles ---- */
-.bubbles{position:absolute;inset:0;z-index:1;pointer-events:none;overflow:hidden}
-.bubble{position:absolute;bottom:-8vh;border-radius:50%;
-  background:radial-gradient(circle at 35% 30%, rgba(255,255,255,.9), rgba(160,220,255,.25) 45%, rgba(160,220,255,0) 70%);
-  box-shadow:0 0 8px rgba(150,220,255,.4);
-  animation:rise linear infinite;opacity:0}
-@keyframes rise{
-  0%{transform:translateY(0) translateX(0) scale(.8);opacity:0}
-  10%{opacity:.7}
-  90%{opacity:.5}
-  100%{transform:translateY(-118vh) translateX(var(--drift,20px)) scale(1);opacity:0}
-}
-
-/* ---- jellyfish ---- */
-.jellies{position:absolute;inset:0;z-index:2;pointer-events:none}
-.jelly{position:absolute;will-change:transform;filter:drop-shadow(0 0 22px var(--glow,rgba(140,100,255,.55)));
-  animation:drift var(--dur,40s) ease-in-out infinite alternate}
-.jelly svg{display:block;overflow:visible;animation:pulse var(--pulse,5s) ease-in-out infinite}
-@keyframes drift{
-  0%{transform:translate(0,0) rotate(-4deg)}
-  100%{transform:translate(var(--dx,40px),var(--dy,-60px)) rotate(5deg)}
-}
-@keyframes pulse{0%,100%{transform:scale(1,1)}50%{transform:scale(1.09,.9)}}
-.tentacle{animation:tent var(--tent,4s) ease-in-out infinite alternate;transform-origin:top center}
-@keyframes tent{from{transform:translateY(0) skewX(-3deg)}to{transform:translateY(6px) skewX(4deg)}}
+/* ---- dark backdrop (ocean scene removed) ---- */
+.backdrop{position:absolute;inset:0;z-index:0;
+  background:radial-gradient(92% 72% at 50% 34%, #101a30 0%, #0a1120 42%, #05070f 74%, #03050b 100%);}
+.backdrop::after{content:'';position:absolute;inset:0;
+  background:radial-gradient(58% 44% at 50% 76%, rgba(43,111,255,.16), transparent 66%);
+  opacity:calc(1 - var(--p)*.5)}
 
 /* ---- team (human → AI) ---- */
 .team{
@@ -292,20 +236,8 @@ a{color:inherit;text-decoration:none}
 <section class="hero" id="hero">
   <div class="stage" id="stage">
 
-    <!-- ocean -->
-    <div class="ocean" aria-hidden="true">
-      <div class="ocean__base"></div>
-      <div class="ocean__caustics"></div>
-      <div class="ocean__rays"></div>
-      <div class="ocean__depth"></div>
-      <div class="ocean__vignette"></div>
-    </div>
-
-    <!-- bubbles -->
-    <div class="bubbles" id="bubbles" aria-hidden="true"></div>
-
-    <!-- jellyfish -->
-    <div class="jellies" id="jellies" aria-hidden="true"></div>
+    <!-- dark backdrop -->
+    <div class="backdrop" aria-hidden="true"></div>
 
     <!-- team: humans → AI -->
     <div class="team" id="team">
@@ -339,72 +271,6 @@ a{color:inherit;text-decoration:none}
   var root=document.documentElement;
   var reduce=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  /* ---------- bubbles ---------- */
-  var bWrap=document.getElementById('bubbles');
-  var BN=reduce?0:22;
-  for(var i=0;i<BN;i++){
-    var b=document.createElement('span');b.className='bubble';
-    var s=4+Math.random()*16;
-    b.style.width=s+'px';b.style.height=s+'px';
-    b.style.left=(Math.random()*100)+'%';
-    b.style.setProperty('--drift',(Math.random()*80-40)+'px');
-    b.style.animationDuration=(9+Math.random()*14)+'s';
-    b.style.animationDelay=(-Math.random()*20)+'s';
-    bWrap.appendChild(b);
-  }
-
-  /* ---------- jellyfish ---------- */
-  function jelly(cfg){
-    var uid='jg'+Math.random().toString(36).slice(2,8);
-    var w=cfg.size, h=cfg.size*1.35;
-    var svg=
-      '<svg width="'+w+'" height="'+h+'" viewBox="0 0 120 165">'+
-      '<defs>'+
-        '<radialGradient id="'+uid+'b" cx="50%" cy="38%" r="62%">'+
-          '<stop offset="0%" stop-color="'+cfg.c1+'" stop-opacity=".95"/>'+
-          '<stop offset="45%" stop-color="'+cfg.c2+'" stop-opacity=".55"/>'+
-          '<stop offset="100%" stop-color="'+cfg.c2+'" stop-opacity="0"/>'+
-        '</radialGradient>'+
-        '<linearGradient id="'+uid+'t" x1="0" y1="0" x2="0" y2="1">'+
-          '<stop offset="0%" stop-color="'+cfg.c1+'" stop-opacity=".8"/>'+
-          '<stop offset="100%" stop-color="'+cfg.c2+'" stop-opacity="0"/>'+
-        '</linearGradient>'+
-      '</defs>'+
-      '<g class="tentacle" style="--tent:'+(3+Math.random()*3).toFixed(1)+'s">'+
-        tent(40,70,uid)+tent(52,66,uid)+tent(64,66,uid)+tent(76,66,uid)+tent(88,70,uid)+
-      '</g>'+
-      '<path d="M18,64 C18,26 46,8 62,8 C80,8 104,28 104,64 C104,74 96,80 84,74 C74,69 70,74 61,74 C52,74 48,69 38,74 C26,80 18,74 18,64 Z" fill="url(#'+uid+'b)"/>'+
-      '<ellipse cx="61" cy="40" rx="30" ry="20" fill="#ffffff" opacity=".14"/>'+
-      '<ellipse cx="52" cy="32" rx="8" ry="5" fill="#ffffff" opacity=".35"/>'+
-      '</svg>';
-    var el=document.createElement('div');
-    el.className='jelly';
-    el.style.left=cfg.x;el.style.top=cfg.y;
-    el.style.setProperty('--glow',cfg.glow);
-    el.style.setProperty('--dur',cfg.dur+'s');
-    el.style.setProperty('--dx',cfg.dx+'px');
-    el.style.setProperty('--dy',cfg.dy+'px');
-    el.style.setProperty('--pulse',cfg.pulse+'s');
-    el.style.animationDelay=(-Math.random()*cfg.dur)+'s';
-    el.dataset.depth=cfg.depth;
-    el.innerHTML=svg;
-    return el;
-  }
-  function tent(x,len,uid){
-    var sway=(Math.random()*10-5).toFixed(1);
-    return '<path d="M'+x+',66 q'+sway+','+(len*0.45)+' 0,'+len+'" stroke="url(#'+uid+'t)" stroke-width="3.4" fill="none" stroke-linecap="round"/>';
-  }
-  var jWrap=document.getElementById('jellies');
-  var defs=[
-    {size:150,x:'8%', y:'20%',c1:'#8be9ff',c2:'#7b3ff2',glow:'rgba(123,63,242,.6)', dur:38,dx:60, dy:-50,pulse:5, depth:.9},
-    {size:110,x:'70%',y:'14%',c1:'#b39cff',c2:'#2b6fff',glow:'rgba(43,111,255,.55)',dur:46,dx:-70,dy:-40,pulse:6, depth:.7},
-    {size:190,x:'52%',y:'46%',c1:'#7fe9ff',c2:'#a855f7',glow:'rgba(168,85,247,.6)', dur:52,dx:40, dy:-70,pulse:7, depth:1.2},
-    {size:90, x:'24%',y:'58%',c1:'#c6b4ff',c2:'#16e0d0',glow:'rgba(22,224,208,.45)',dur:42,dx:80, dy:-55,pulse:5.5,depth:.55},
-    {size:130,x:'85%',y:'52%',c1:'#9ad6ff',c2:'#7b3ff2',glow:'rgba(123,63,242,.5)', dur:48,dx:-55,dy:-65,pulse:6.5,depth:1}
-  ];
-  var jset=[];
-  defs.forEach(function(d){var el=jelly(d);jWrap.appendChild(el);jset.push(el);});
-
   /* ---------- scroll progress ---------- */
   var hero=document.getElementById('hero');
   var header=document.getElementById('header');
@@ -419,11 +285,6 @@ a{color:inherit;text-decoration:none}
     curP+=(targetP-curP)*0.12;
     root.style.setProperty('--p',curP.toFixed(4));
     root.style.setProperty('--ai',smooth(0.24,0.72,curP).toFixed(4));
-    // jellyfish parallax rise with depth
-    for(var i=0;i<jset.length;i++){
-      var d=parseFloat(jset[i].dataset.depth);
-      jset[i].style.marginTop=(-curP*120*d)+'px';
-    }
     header.classList.toggle('scrolled',window.scrollY>40);
     requestAnimationFrame(frame);
   }
