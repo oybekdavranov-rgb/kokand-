@@ -1,0 +1,13 @@
+# Bog'liqliklar
+node_modules/
+
+# Server ishlaganda avtomatik hosil bo'ladigan ma'lumot fayli
+data.json
+data.json.tmp
+
+# Maxfiy sozlamalar
+.env
+
+# Loglar
+*.log
+npm-debug.log*
