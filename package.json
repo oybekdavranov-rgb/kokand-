@@ -1,17 +1,23 @@
 {
   "name": "qu-tuzilma-backend",
-  "version": "1.0.0",
-  "description": "Qo'qon Universiteti tashkiliy tuzilma — backend (Node + Express)",
+  "version": "2.0.0",
+  "description": "Qo'qon Universiteti tashkiliy tuzilma — backend (Node + Express) with analytics & production hardening",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js"
+    "dev": "node server.js",
+    "hash-password": "node tools/hash-password.js",
+    "gen-secret": "node -e \"console.log(require('crypto').randomBytes(48).toString('base64url'))\"",
+    "migrate": "node migrate.js"
   },
   "engines": {
-    "node": ">=16"
+    "node": ">=18"
   },
   "dependencies": {
     "express": "^4.19.2"
+  },
+  "optionalDependencies": {
+    "pg": "^8.11.5"
   }
 }
