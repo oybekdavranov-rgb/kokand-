@@ -1,0 +1,467 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<title>Qo'qon Universiteti — Tashkiliy tuzilma</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Qo'qon Universiteti rasmiy tashkiliy tuzilmasi — rahbariyat, departamentlar, fakultetlar, markazlar va kengashlar.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23122a30'/%3E%3Ctext x='32' y='44' font-family='Georgia,serif' font-size='34' fill='%23e3b866' text-anchor='middle'%3EKU%3C/text%3E%3C/svg%3E">
+
+<!-- Google Fonts: Syne + Comfortaa (available on Google Fonts) -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@400;500;600;700&family=Syne:wght@500;600;700;800&display=swap">
+
+<style>
+/* =====================================================================
+   FONTS
+   Syne + Comfortaa load from Google Fonts above.
+   TAN - MERMAID, Northwell and Brittany Signature are premium fonts and
+   are NOT on Google Fonts. Drop the font files into public/assets/fonts/
+   (see assets/fonts/README.txt) and they activate automatically; until
+   then the fallbacks below keep the site looking correct.
+   ===================================================================== */
+@font-face{
+  font-family:"TAN Mermaid";
+  src:local("TAN - MERMAID"), local("TAN MERMAID"),
+      url("assets/fonts/TAN-MERMAID.woff2") format("woff2"),
+      url("assets/fonts/TAN-MERMAID.woff") format("woff"),
+      url("assets/fonts/TAN-MERMAID.ttf") format("truetype");
+  font-display:swap;
+}
+@font-face{
+  font-family:"Northwell";
+  src:local("Northwell"),
+      url("assets/fonts/Northwell.woff2") format("woff2"),
+      url("assets/fonts/Northwell.woff") format("woff"),
+      url("assets/fonts/Northwell.ttf") format("truetype");
+  font-display:swap;
+}
+@font-face{
+  font-family:"Brittany Signature";
+  src:local("Brittany Signature"), local("BrittanySignature"),
+      url("assets/fonts/BrittanySignature.woff2") format("woff2"),
+      url("assets/fonts/BrittanySignature.woff") format("woff"),
+      url("assets/fonts/BrittanySignature.ttf") format("truetype");
+  font-display:swap;
+}
+
+/* ---- font role variables ---- */
+:root{
+  --f-display:"TAN Mermaid","Syne",system-ui,sans-serif;   /* big decorative titles */
+  --f-head:"Syne",system-ui,sans-serif;                    /* headings / card titles */
+  --f-body:"Comfortaa",system-ui,-apple-system,Segoe UI,Roboto,sans-serif; /* UI + body */
+  --f-script:"Northwell","Brittany Signature",cursive;      /* script accent */
+  --f-sign:"Brittany Signature","Northwell",cursive;        /* signature accent */
+
+  /* palette — deliberate single (dark, immersive) theme over the bg */
+  --gold:#e3b866;
+  --gold-soft:#f0d49a;
+  --cyan:#83d6c4;
+  --ink:#f4f6f8;
+  --muted:rgba(244,246,248,.66);
+  --faint:rgba(244,246,248,.42);
+  --line:rgba(255,255,255,.16);
+
+  /* cards ≈ 90% transparent (10% opaque fill) with glass blur */
+  --card-bg:rgba(255,255,255,.10);
+  --card-bg-hover:rgba(255,255,255,.16);
+  --card-border:rgba(255,255,255,.22);
+  --glass-blur:16px;
+  --radius:22px;
+  --radius-sm:14px;
+
+  --danger:#ff8a8a;
+  --ok:#8ee6b0;
+  --shadow:0 10px 40px rgba(0,0,0,.30);
+}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;color:var(--ink);
+  font-family:var(--f-body);font-size:16px;line-height:1.55;
+  -webkit-font-smoothing:antialiased;
+  background:#0c1a20; /* explicit base so no host ground shows through */
+  overflow-x:hidden;
+}
+::selection{background:var(--gold);color:#1a1200}
+button{font-family:inherit}
+a{color:var(--gold-soft)}
+
+/* ---------- Animated / video background ---------- */
+#bg{position:fixed;inset:0;z-index:-3;overflow:hidden;background:
+    radial-gradient(120% 120% at 15% 10%, #14424a 0%, transparent 55%),
+    radial-gradient(120% 120% at 85% 90%, #3a2a55 0%, transparent 55%),
+    linear-gradient(135deg,#0c1a20 0%,#122a30 45%,#1a2140 100%);}
+#bg video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.5}
+#bg .aurora{position:absolute;inset:-20%;background:
+    radial-gradient(40% 40% at 30% 30%, rgba(131,214,196,.20), transparent 60%),
+    radial-gradient(45% 45% at 70% 65%, rgba(227,184,102,.16), transparent 60%);
+  filter:blur(20px);animation:drift 24s ease-in-out infinite alternate}
+@keyframes drift{from{transform:translate3d(-3%,-2%,0) scale(1)}to{transform:translate3d(3%,3%,0) scale(1.08)}}
+#bg::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(6,14,18,.35),rgba(6,14,18,.72))}
+@media (prefers-reduced-motion:reduce){#bg .aurora{animation:none}}
+
+/* ---------- Layout ---------- */
+.wrap{max-width:1120px;margin:0 auto;padding:0 20px}
+header.site{padding:26px 0 10px;position:sticky;top:0;z-index:40;
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  background:linear-gradient(180deg,rgba(8,18,22,.55),rgba(8,18,22,0))}
+.topbar{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:14px;cursor:pointer;user-select:none}
+.brand .logo{width:52px;height:52px;border-radius:14px;object-fit:contain;
+  background:var(--card-bg);border:1px solid var(--card-border);padding:6px;flex:0 0 auto}
+.brand .logo.placeholder{display:grid;place-items:center;font-family:var(--f-sign);
+  font-size:30px;color:var(--gold);line-height:1}
+.brand .names{display:flex;flex-direction:column;line-height:1.05}
+.brand .u-name{font-family:var(--f-head);font-weight:800;font-size:19px;letter-spacing:.2px}
+.brand .u-sub{font-family:var(--f-script);font-size:20px;color:var(--gold-soft);margin-top:-2px}
+
+.search{margin-left:auto;position:relative;flex:1 1 260px;max-width:420px}
+.search input{width:100%;padding:12px 42px 12px 16px;border-radius:999px;
+  border:1px solid var(--card-border);background:var(--card-bg);color:var(--ink);
+  font-family:var(--f-body);font-size:15px;outline:none;
+  backdrop-filter:blur(var(--glass-blur));-webkit-backdrop-filter:blur(var(--glass-blur))}
+.search input::placeholder{color:var(--faint)}
+.search input:focus{border-color:var(--gold);box-shadow:0 0 0 3px rgba(227,184,102,.18)}
+.search .ic{position:absolute;right:14px;top:50%;transform:translateY(-50%);opacity:.6;pointer-events:none}
+
+/* live global counter */
+.livebar{display:flex;align-items:center;gap:18px;flex-wrap:wrap;
+  margin:14px 0 0;color:var(--muted);font-size:13.5px}
+.livebar .pulse{width:9px;height:9px;border-radius:50%;background:var(--ok);
+  box-shadow:0 0 0 0 rgba(142,230,176,.7);animation:pulse 2s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(142,230,176,.6)}70%{box-shadow:0 0 0 10px rgba(142,230,176,0)}100%{box-shadow:0 0 0 0 rgba(142,230,176,0)}}
+.livebar b{color:var(--ink);font-variant-numeric:tabular-nums}
+
+/* ---------- Hero (home only) ---------- */
+.hero{padding:30px 0 8px;text-align:center}
+.hero .kicker{font-family:var(--f-sign);font-size:clamp(26px,5vw,42px);color:var(--gold-soft);line-height:1}
+.hero h1{font-family:var(--f-display);font-weight:700;letter-spacing:.5px;
+  font-size:clamp(30px,6.5vw,64px);margin:.1em 0 .12em;text-wrap:balance;
+  text-transform:uppercase}
+.hero p{font-family:var(--f-body);color:var(--muted);max-width:60ch;margin:0 auto;font-size:16px}
+
+/* ---------- Breadcrumb ---------- */
+.crumbs{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:22px 0 6px;font-size:14px}
+.crumbs button{background:none;border:none;color:var(--gold-soft);cursor:pointer;
+  font-size:14px;padding:4px 2px;font-family:var(--f-body)}
+.crumbs button:hover{text-decoration:underline}
+.crumbs .sep{opacity:.45}
+.crumbs .cur{color:var(--ink);font-weight:600}
+
+/* ---------- Card grid ---------- */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:18px;
+  padding:14px 0 60px}
+.card{position:relative;background:var(--card-bg);border:1px solid var(--card-border);
+  border-radius:var(--radius);padding:20px 20px 18px;cursor:pointer;
+  backdrop-filter:blur(var(--glass-blur));-webkit-backdrop-filter:blur(var(--glass-blur));
+  box-shadow:var(--shadow);transition:transform .18s ease, background .18s ease, border-color .18s ease;
+  overflow:hidden}
+.card::before{content:"";position:absolute;inset:0;border-radius:inherit;
+  background:linear-gradient(160deg,rgba(255,255,255,.10),transparent 40%);pointer-events:none}
+.card:hover{transform:translateY(-4px);background:var(--card-bg-hover);border-color:var(--gold)}
+.card:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.card .ic-wrap{width:48px;height:48px;border-radius:14px;display:grid;place-items:center;
+  background:rgba(227,184,102,.16);border:1px solid rgba(227,184,102,.30);color:var(--gold-soft);margin-bottom:14px}
+.card h3{font-family:var(--f-head);font-weight:700;font-size:19px;margin:0 0 6px;line-height:1.2;text-wrap:balance}
+.card .role{font-family:var(--f-script);font-size:20px;color:var(--gold-soft);line-height:1;margin:-2px 0 6px}
+.card .desc{color:var(--muted);font-size:14px;margin:0}
+.card .count-in{margin-top:14px;font-size:12.5px;color:var(--faint);display:flex;gap:12px;flex-wrap:wrap}
+.card .count-in span{display:inline-flex;align-items:center;gap:5px}
+.card.member .avatar{width:64px;height:64px;border-radius:16px;object-fit:cover;
+  background:rgba(255,255,255,.12);border:1px solid var(--card-border);margin-bottom:12px;display:block}
+.card.member .avatar.ph{display:grid;place-items:center;font-family:var(--f-head);font-weight:700;font-size:24px;color:var(--gold-soft)}
+
+/* view badge (live) */
+.views{position:absolute;top:14px;right:14px;display:inline-flex;align-items:center;gap:6px;
+  background:rgba(6,14,18,.5);border:1px solid var(--card-border);border-radius:999px;
+  padding:5px 10px;font-size:12px;color:var(--gold-soft);font-variant-numeric:tabular-nums;
+  backdrop-filter:blur(6px)}
+.views svg{opacity:.85}
+.views.bump{animation:bump .5s ease}
+@keyframes bump{0%{transform:scale(1)}30%{transform:scale(1.18)}100%{transform:scale(1)}}
+
+/* admin controls on card */
+.card .admin-ctrls{position:absolute;bottom:12px;right:12px;display:none;gap:8px}
+body.editing .card .admin-ctrls{display:flex}
+.iconbtn{width:34px;height:34px;border-radius:10px;border:1px solid var(--card-border);
+  background:rgba(6,14,18,.55);color:var(--ink);cursor:pointer;display:grid;place-items:center;font-size:15px}
+.iconbtn:hover{border-color:var(--gold);color:var(--gold-soft)}
+.iconbtn.del:hover{border-color:var(--danger);color:var(--danger)}
+
+.addcard{display:grid;place-items:center;min-height:150px;border:1.5px dashed var(--card-border);
+  border-radius:var(--radius);background:rgba(255,255,255,.04);cursor:pointer;color:var(--muted);
+  font-size:15px;gap:8px;text-align:center}
+.addcard:hover{border-color:var(--gold);color:var(--gold-soft)}
+.addcard .plus{font-size:32px;line-height:1;font-family:var(--f-head)}
+
+.empty{padding:60px 20px;text-align:center;color:var(--muted)}
+
+/* ---------- Modals ---------- */
+.overlay{position:fixed;inset:0;z-index:80;background:rgba(4,10,14,.62);
+  backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;padding:20px}
+.overlay.open{display:flex}
+.modal{width:100%;max-width:520px;max-height:88vh;overflow:auto;background:rgba(18,32,38,.86);
+  border:1px solid var(--card-border);border-radius:24px;padding:26px;
+  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);box-shadow:var(--shadow)}
+.modal.wide{max-width:900px}
+.modal h2{font-family:var(--f-head);font-weight:800;font-size:24px;margin:0 0 4px}
+.modal .sub{color:var(--muted);font-size:14px;margin:0 0 18px}
+.modal .close{position:absolute;top:18px;right:20px}
+.modal-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:6px}
+
+.member-detail .m-top{display:flex;gap:16px;align-items:center;margin-bottom:16px}
+.member-detail .m-top img,.member-detail .m-top .ph{width:84px;height:84px;border-radius:20px;object-fit:cover;
+  border:1px solid var(--card-border);background:rgba(255,255,255,.10);flex:0 0 auto;display:grid;place-items:center;
+  font-family:var(--f-head);font-weight:700;font-size:30px;color:var(--gold-soft)}
+.member-detail h2{margin:0}
+.member-detail .contacts{display:flex;flex-direction:column;gap:10px;margin-top:6px}
+.member-detail .contacts a,.member-detail .contacts span{display:flex;align-items:center;gap:10px;color:var(--ink);
+  text-decoration:none;font-size:15px;padding:10px 14px;border:1px solid var(--line);border-radius:12px;
+  background:rgba(255,255,255,.05)}
+.member-detail .contacts a:hover{border-color:var(--gold)}
+.member-detail .bio{color:var(--muted);margin:14px 0 0;white-space:pre-wrap}
+
+/* ---------- Forms ---------- */
+label.fld{display:block;margin:12px 0 0;font-size:13px;color:var(--muted)}
+label.fld span{display:block;margin-bottom:6px}
+.inp,textarea.inp,select.inp{width:100%;padding:11px 14px;border-radius:12px;border:1px solid var(--card-border);
+  background:rgba(255,255,255,.06);color:var(--ink);font-family:var(--f-body);font-size:15px;outline:none}
+.inp:focus,textarea.inp:focus,select.inp:focus{border-color:var(--gold)}
+textarea.inp{min-height:90px;resize:vertical}
+select.inp option{background:#12262c}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:520px){.row2{grid-template-columns:1fr}}
+
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:11px 18px;border-radius:12px;
+  border:1px solid var(--card-border);background:rgba(255,255,255,.07);color:var(--ink);cursor:pointer;
+  font-size:15px;font-weight:600;transition:.15s}
+.btn:hover{border-color:var(--gold);background:rgba(227,184,102,.14)}
+.btn.primary{background:linear-gradient(135deg,var(--gold),#c99a4b);color:#221700;border-color:transparent}
+.btn.primary:hover{filter:brightness(1.06)}
+.btn.ghost{background:none}
+.btn.danger{border-color:rgba(255,138,138,.5);color:var(--danger)}
+.btn-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:22px}
+.btn-row .spacer{flex:1}
+.mini{font-size:12.5px;color:var(--faint);margin-top:8px}
+.err{color:var(--danger);font-size:14px;margin-top:10px;min-height:1em}
+
+/* photo upload */
+.photo-up{display:flex;gap:14px;align-items:center;margin-top:12px}
+.photo-up .prev{width:70px;height:70px;border-radius:16px;object-fit:cover;border:1px solid var(--card-border);
+  background:rgba(255,255,255,.08)}
+
+/* ---------- Admin toolbar ---------- */
+#adminbar{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);z-index:60;
+  display:none;gap:8px;flex-wrap:wrap;justify-content:center;padding:10px 12px;
+  background:rgba(12,24,29,.82);border:1px solid var(--card-border);border-radius:18px;
+  backdrop-filter:blur(16px);box-shadow:var(--shadow);max-width:calc(100% - 24px)}
+body.is-admin #adminbar{display:flex}
+#adminbar .tag{display:flex;align-items:center;gap:7px;color:var(--gold-soft);font-size:13px;
+  padding:0 10px 0 4px;border-right:1px solid var(--line)}
+#adminbar .btn{padding:9px 13px;font-size:13.5px}
+#adminbar .btn.on{background:linear-gradient(135deg,var(--gold),#c99a4b);color:#221700;border-color:transparent}
+
+/* dirty indicator */
+.dirty-dot{width:8px;height:8px;border-radius:50%;background:var(--danger);display:none}
+body.dirty .dirty-dot{display:inline-block}
+
+/* ---------- Stats dashboard ---------- */
+.stat-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:6px 0 20px}
+.tile{background:rgba(255,255,255,.06);border:1px solid var(--line);border-radius:16px;padding:16px}
+.tile .k{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+.tile .v{font-family:var(--f-head);font-weight:800;font-size:28px;margin-top:6px;font-variant-numeric:tabular-nums}
+.tile .v.gold{color:var(--gold-soft)}
+.panel{margin-top:22px}
+.panel h3{font-family:var(--f-head);font-size:16px;margin:0 0 10px;color:var(--ink)}
+.bars{display:flex;align-items:flex-end;gap:3px;height:120px;padding:8px;background:rgba(255,255,255,.04);
+  border:1px solid var(--line);border-radius:14px;overflow-x:auto}
+.bars .bar{flex:1 0 10px;min-width:8px;background:linear-gradient(180deg,var(--cyan),rgba(131,214,196,.25));
+  border-radius:5px 5px 0 0;position:relative;min-height:2px}
+.bars .bar span{position:absolute;top:-18px;left:50%;transform:translateX(-50%);font-size:10px;color:var(--muted)}
+.bars .bar em{position:absolute;bottom:-18px;left:50%;transform:translateX(-50%);font-size:9.5px;color:var(--faint);font-style:normal}
+.toplist{list-style:none;padding:0;margin:0}
+.toplist li{display:flex;align-items:center;gap:12px;padding:9px 12px;border:1px solid var(--line);
+  border-radius:12px;margin-bottom:8px;background:rgba(255,255,255,.04)}
+.toplist li .rank{font-family:var(--f-head);font-weight:800;color:var(--gold-soft);width:22px;text-align:center}
+.toplist li .lbl{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.toplist li .num{font-variant-numeric:tabular-nums;color:var(--muted)}
+.recent{max-height:240px;overflow:auto}
+.recent .r{display:flex;gap:10px;font-size:13px;padding:6px 0;border-bottom:1px solid var(--line);color:var(--muted)}
+.recent .r time{color:var(--faint);flex:0 0 auto;font-variant-numeric:tabular-nums}
+.recent .r .t{color:var(--gold-soft);flex:0 0 auto;text-transform:uppercase;font-size:11px;letter-spacing:.05em;padding-top:1px}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+@media(max-width:640px){.two-col{grid-template-columns:1fr}}
+
+/* toast */
+#toast{position:fixed;left:50%;bottom:84px;transform:translateX(-50%) translateY(20px);z-index:100;
+  background:rgba(12,24,29,.92);border:1px solid var(--card-border);border-radius:12px;padding:12px 18px;
+  color:var(--ink);font-size:14px;opacity:0;pointer-events:none;transition:.25s;box-shadow:var(--shadow)}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+#toast.ok{border-color:rgba(142,230,176,.5)}
+#toast.bad{border-color:rgba(255,138,138,.5)}
+
+.hidden{display:none !important}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}
+</style>
+</head>
+<body>
+
+<div id="bg"><div class="aurora"></div><video id="bgvideo" autoplay muted loop playsinline class="hidden"></video></div>
+
+<header class="site">
+  <div class="wrap">
+    <div class="topbar">
+      <div class="brand" id="brand" title="Bosh sahifa">
+        <div class="logo placeholder" id="logo">KU</div>
+        <div class="names">
+          <span class="u-name">Qo'qon Universiteti</span>
+          <span class="u-sub">Tashkiliy tuzilma</span>
+        </div>
+      </div>
+      <div class="search">
+        <label for="q" class="sr-only">Qidiruv</label>
+        <input id="q" type="search" placeholder="Bo'lim yoki xodimni qidiring…" autocomplete="off">
+        <svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+      </div>
+    </div>
+    <div class="livebar">
+      <span class="pulse" aria-hidden="true"></span>
+      <span>Hozir jonli · Jami tashriflar: <b id="totalVisits">—</b></span>
+      <span>Umumiy ko'rishlar: <b id="totalViews">—</b></span>
+    </div>
+  </div>
+</header>
+
+<main class="wrap" id="main">
+  <section class="hero" id="hero">
+    <div class="kicker">Xush kelibsiz</div>
+    <h1>Tashkiliy&nbsp;tuzilma</h1>
+    <p>Universitet rahbariyati, departamentlari, fakultetlari, markazlari va kengashlari bilan tanishing. Har bir bo'limni bosib, ichkariga kiring.</p>
+  </section>
+
+  <nav class="crumbs" id="crumbs" aria-label="Yo'nalish"></nav>
+  <div class="grid" id="grid"></div>
+</main>
+
+<!-- Member detail modal -->
+<div class="overlay" id="memberOverlay">
+  <div class="modal member-detail" style="position:relative">
+    <button class="iconbtn close" data-close aria-label="Yopish">✕</button>
+    <div id="memberBody"></div>
+  </div>
+</div>
+
+<!-- Admin login modal -->
+<div class="overlay" id="loginOverlay">
+  <div class="modal" style="position:relative;max-width:420px">
+    <button class="iconbtn close" data-close aria-label="Yopish">✕</button>
+    <h2>Admin kirish</h2>
+    <p class="sub">Boshqaruv paneliga kirish uchun parolni kiriting.</p>
+    <label class="fld"><span>Parol</span>
+      <input id="pw" class="inp" type="password" autocomplete="current-password" placeholder="••••••••">
+    </label>
+    <div class="err" id="loginErr"></div>
+    <div class="btn-row">
+      <button class="btn primary" id="loginBtn">Kirish</button>
+      <button class="btn ghost" data-close>Bekor</button>
+    </div>
+  </div>
+</div>
+
+<!-- Node (department) edit modal -->
+<div class="overlay" id="nodeOverlay">
+  <div class="modal" style="position:relative">
+    <button class="iconbtn close" data-close aria-label="Yopish">✕</button>
+    <h2 id="nodeTitle">Bo'limni tahrirlash</h2>
+    <p class="sub">Bo'lim nomi, belgisi va tavsifi.</p>
+    <label class="fld"><span>Nomi</span><input id="n_name" class="inp" placeholder="Bo'lim nomi"></label>
+    <div class="row2">
+      <label class="fld"><span>Belgi (icon)</span>
+        <select id="n_icon" class="inp"></select>
+      </label>
+      <label class="fld"><span>Turi</span>
+        <select id="n_kind" class="inp">
+          <option value="branch">Ichki bo'limlar (children)</option>
+          <option value="leaf">Xodimlar ro'yxati (members)</option>
+        </select>
+      </label>
+    </div>
+    <label class="fld"><span>Tavsif</span><textarea id="n_desc" class="inp" placeholder="Qisqacha tavsif"></textarea></label>
+    <div class="btn-row">
+      <button class="btn primary" id="nodeSave">Saqlash</button>
+      <button class="btn ghost" data-close>Bekor</button>
+    </div>
+  </div>
+</div>
+
+<!-- Member edit modal -->
+<div class="overlay" id="memberEditOverlay">
+  <div class="modal" style="position:relative">
+    <button class="iconbtn close" data-close aria-label="Yopish">✕</button>
+    <h2 id="memEditTitle">Xodimni tahrirlash</h2>
+    <div class="row2">
+      <label class="fld"><span>F.I.O.</span><input id="m_name" class="inp"></label>
+      <label class="fld"><span>Lavozimi</span><input id="m_role" class="inp"></label>
+    </div>
+    <label class="fld"><span>Rasm</span>
+      <div class="photo-up">
+        <img id="m_prev" class="prev" alt="">
+        <div>
+          <input id="m_photo_file" type="file" accept="image/*" class="hidden">
+          <button class="btn" type="button" id="m_photo_btn">Rasm yuklash</button>
+          <button class="btn ghost" type="button" id="m_photo_clear">Tozalash</button>
+          <div class="mini">PNG/JPG/WebP · SVG qo'llanmaydi</div>
+        </div>
+      </div>
+    </label>
+    <label class="fld"><span>Biografiya</span><textarea id="m_bio" class="inp"></textarea></label>
+    <div class="row2">
+      <label class="fld"><span>Telefon</span><input id="m_phone" class="inp" placeholder="+998…"></label>
+      <label class="fld"><span>Email</span><input id="m_email" class="inp" placeholder="mail@ku.uz"></label>
+    </div>
+    <label class="fld"><span>Telegram</span><input id="m_telegram" class="inp" placeholder="@username yoki https://t.me/…"></label>
+    <div class="err" id="memEditErr"></div>
+    <div class="btn-row">
+      <button class="btn primary" id="memSave">Saqlash</button>
+      <button class="btn ghost" data-close>Bekor</button>
+    </div>
+  </div>
+</div>
+
+<!-- Stats dashboard modal -->
+<div class="overlay" id="statsOverlay">
+  <div class="modal wide" style="position:relative">
+    <button class="iconbtn close" data-close aria-label="Yopish">✕</button>
+    <div class="modal-head">
+      <div>
+        <h2>Statistika paneli</h2>
+        <p class="sub" id="statsSince">—</p>
+      </div>
+      <button class="btn ghost" id="statsRefresh">↻ Yangilash</button>
+    </div>
+    <div id="statsBody"></div>
+  </div>
+</div>
+
+<!-- Admin toolbar -->
+<div id="adminbar">
+  <span class="tag">● Admin</span>
+  <button class="btn" id="tEdit">✎ Tahrirlash</button>
+  <button class="btn" id="tAdd">＋ Bo'lim</button>
+  <button class="btn" id="tSave">💾 Saqlash <span class="dirty-dot"></span></button>
+  <button class="btn" id="tStats">📊 Statistika</button>
+  <button class="btn" id="tExport">⇩ Eksport</button>
+  <button class="btn" id="tImport">⇧ Import</button>
+  <button class="btn danger" id="tReset">↺ Reset</button>
+  <button class="btn ghost" id="tLogout">Chiqish</button>
+  <input id="importFile" type="file" accept="application/json,.json" class="hidden">
+</div>
+
+<div id="toast"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
