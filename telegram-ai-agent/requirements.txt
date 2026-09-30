@@ -1,0 +1,52 @@
+# ===== Telegram AI Agent — runtime bog'liqliklari (Python 3.12) =====
+
+# ---- Web / API ----
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+gunicorn==23.0.0
+python-multipart==0.0.20
+
+# ---- Config / Validation ----
+pydantic==2.10.4
+pydantic-settings==2.7.0
+
+# ---- Database (async ilova + sync Alembic) ----
+SQLAlchemy[asyncio]==2.0.36
+asyncpg==0.30.0
+psycopg2-binary==2.9.10
+alembic==1.14.0
+greenlet==3.1.1
+
+# ---- Cache / Broker / Queue ----
+redis==5.2.1
+celery==5.4.0
+flower==2.0.1
+
+# ---- Telegram (userbot + bot API) ----
+telethon==1.38.1
+
+# ---- AI (Claude asosiy + OpenAI/Gemini fallback) ----
+anthropic==0.42.0
+openai==1.59.6
+google-generativeai==0.8.3
+
+# ---- Yangilik yig'ish ----
+httpx==0.28.1
+feedparser==6.0.11
+beautifulsoup4==4.12.3
+lxml==5.3.0
+
+# ---- Rasm bilan ishlash ----
+pillow==11.0.0
+
+# ---- Xavfsizlik ----
+cryptography==44.0.0
+pyjwt==2.10.1
+bcrypt==4.2.1
+
+# ---- Logging / Resilience ----
+structlog==24.4.0
+tenacity==9.0.0
+
+# NOTE: dev/test bog'liqliklari (pytest, ruff, black, mypy) alohida
+# requirements-dev.txt faylida saqlanadi — keyingi bosqichda qo'shiladi.

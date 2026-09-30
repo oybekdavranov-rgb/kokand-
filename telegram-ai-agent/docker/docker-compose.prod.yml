@@ -1,0 +1,45 @@
+# ===== Prod override: Nginx (reverse proxy + TLS) va Certbot (SSL) =====
+# Ishlatish: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+name: telegram-ai-agent
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  # ------------------------------ Nginx (443/80) ----------------------------
+  nginx:
+    image: nginx:1.27-alpine
+    env_file: [../.env] # DOMAIN o'zgaruvchisi shu yerdan (envsubst)
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/app.conf.template:/etc/nginx/templates/app.conf.template:ro
+      - certbot_conf:/etc/letsencrypt:ro
+      - certbot_www:/var/www/certbot:ro
+    depends_on:
+      - api
+    logging: *default-logging
+    mem_limit: 128m
+    restart: unless-stopped
+
+  # ------------------------------ Certbot (SSL yangilash) -------------------
+  # Har 12 soatda sertifikatni yangilashga urinadi. Birinchi olish:
+  #   bash init-letsencrypt.sh
+  certbot:
+    image: certbot/certbot
+    env_file: [../.env]
+    volumes:
+      - certbot_conf:/etc/letsencrypt
+      - certbot_www:/var/www/certbot
+    entrypoint: /bin/sh -c 'trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot --quiet; sleep 12h & wait $${!}; done'
+    logging: *default-logging
+    restart: unless-stopped
+
+volumes:
+  certbot_conf:
+  certbot_www:

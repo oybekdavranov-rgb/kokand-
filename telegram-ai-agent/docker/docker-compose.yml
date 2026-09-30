@@ -1,0 +1,128 @@
+# ===== Telegram AI Agent — asosiy stack (dev + prod poydevori) =====
+# Ishga tushirish (dev):   docker compose up -d --build
+# Prod (nginx+ssl bilan):  docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+name: telegram-ai-agent
+
+# Log rotatsiyasi — 24/7 da disk to'lmasligi uchun (aks holda json-log cheksiz o'sadi)
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+# Barcha ilova servislari uchun umumiy sozlama (YAML anchor)
+x-app: &app-base
+  build:
+    context: ..
+    dockerfile: docker/Dockerfile
+  image: telegram-ai-agent:latest
+  env_file: [../.env]
+  restart: unless-stopped
+  logging: *default-logging
+  mem_limit: 768m
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+  volumes:
+    - media:/app/media
+
+services:
+  # ------------------------------ Ma'lumotlar bazasi ------------------------
+  postgres:
+    image: postgres:16-alpine
+    env_file: [../.env]
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging: *default-logging
+    mem_limit: 512m
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    # REDIS_PASSWORD o'rnatilgan bo'lsa requirepass qo'llanadi (app URL bilan izchil)
+    command: ["sh", "-c", "redis-server --appendonly yes $${REDIS_PASSWORD:+--requirepass \"$$REDIS_PASSWORD\"}"]
+    env_file: [../.env]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli $${REDIS_PASSWORD:+-a \"$$REDIS_PASSWORD\"} ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging: *default-logging
+    mem_limit: 256m
+    restart: unless-stopped
+
+  # ------------------------------ API (FastAPI) -----------------------------
+  api:
+    <<: *app-base
+    command: ["gunicorn", "app.main:app", "-k", "uvicorn.workers.UvicornWorker",
+              "-b", "0.0.0.0:8000", "-w", "4", "--access-logfile", "-"]
+    # Faqat lokalga ochamiz; prod'da nginx ichki tarmoq orqali ulanadi
+    ports:
+      - "127.0.0.1:8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # ------------------------------ Celery worker (default) -------------------
+  worker:
+    <<: *app-base
+    command: ["celery", "-A", "app.core.celery_app", "worker",
+              "-Q", "default", "-c", "4", "--loglevel=info"]
+    healthcheck:
+      test: ["CMD", "celery", "-A", "app.core.celery_app", "inspect", "ping"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # -------------------------- Publisher (Telethon — 1 ta) -------------------
+  # MUHIM: -c 1 — bitta akkaunt = bitta jarayon (session konflikt bo'lmasin)
+  publisher:
+    <<: *app-base
+    command: ["celery", "-A", "app.core.celery_app", "worker",
+              "-Q", "publish", "-c", "1", "--loglevel=info"]
+    healthcheck:
+      test: ["CMD", "celery", "-A", "app.core.celery_app", "inspect", "ping"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ------------------------------ Celery Beat (scheduler) -------------------
+  beat:
+    <<: *app-base
+    command: ["celery", "-A", "app.core.celery_app", "beat",
+              "-s", "/app/beat/celerybeat-schedule", "--loglevel=info"]
+    volumes:
+      - media:/app/media
+      - beat_data:/app/beat
+
+  # ------------------------------ Admin bot ---------------------------------
+  bot:
+    <<: *app-base
+    command: ["python", "-m", "scripts.run_admin_bot"]
+
+  # ------------------------------ Flower (monitoring) -----------------------
+  # Basic-auth majburiy (FLOWER_BASIC_AUTH=user:parol). Faqat lokalga ochiq.
+  flower:
+    <<: *app-base
+    command: ["sh", "-c", "celery -A app.core.celery_app flower --port=5555 --basic-auth=\"$${FLOWER_BASIC_AUTH:-admin:changeme}\""]
+    ports:
+      - "127.0.0.1:5555:5555"
+
+volumes:
+  postgres_data:
+  redis_data:
+  media:
+  beat_data:

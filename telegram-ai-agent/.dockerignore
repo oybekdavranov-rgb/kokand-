@@ -1,0 +1,31 @@
+# Git
+.git
+.gitignore
+
+# Muhit va maxfiy
+.env
+*.env
+!.env.example
+
+# Python keshlar
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual muhitlar
+.venv/
+venv/
+env/
+
+# Media va vaqtinchalik
+media/
+*.session
+*.log
+
+# Hujjatlar va testlar (image'da kerak emas)
+docs/
+tests/
+deploy/

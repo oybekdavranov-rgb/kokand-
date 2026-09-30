@@ -1,0 +1,26 @@
+# systemd unit — VPS qayta yuklanganda stack avtomatik ko'tariladi.
+# O'rnatish:
+#   sudo cp deploy/telegram-ai-agent.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now telegram-ai-agent
+# Holat:  systemctl status telegram-ai-agent
+# Loglar: journalctl -u telegram-ai-agent -f
+
+[Unit]
+Description=Telegram AI Agent (Docker Compose stack)
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# Loyiha docker/ papkasi (o'zingizga moslang):
+WorkingDirectory=/opt/telegram-ai-agent/docker
+ExecStart=/usr/bin/docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+ExecStop=/usr/bin/docker compose -f docker-compose.yml -f docker-compose.prod.yml down
+ExecReload=/usr/bin/docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+TimeoutStartSec=0
+
+[Install]
+WantedBy=multi-user.target
