@@ -1,0 +1,23 @@
+services:
+  murojaat-bot:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATA_DIR: /data
+      PORT: "8080"
+    ports:
+      - "127.0.0.1:8080:8080"     # faqat lokal: tashqariga nginx chiqaradi
+    volumes:
+      - murojaat-data:/data
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+
+volumes:
+  murojaat-data:

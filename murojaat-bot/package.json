@@ -1,0 +1,24 @@
+{
+  "name": "murojaat-bot",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Qo'qon universiteti Ta'lim fakulteti dekani qabulxonasi — murojaatlar uchun Telegram bot va admin panel",
+  "main": "src/index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/index.js",
+    "setup": "node scripts/setup.js",
+    "hash": "node scripts/hash-password.js",
+    "webhook": "node scripts/webhook.js",
+    "backup": "node scripts/backup.js",
+    "test": "node test/smoke.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.4.1",
+    "express": "^4.21.2",
+    "grammy": "^1.38.1"
+  }
+}

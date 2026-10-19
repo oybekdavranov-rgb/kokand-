@@ -1,0 +1,42 @@
+# =====================================================================
+#  systemd xizmati (VPS uchun)
+#  Joylash:  sudo cp deploy/murojaat-bot.service /etc/systemd/system/
+#            sudo systemctl daemon-reload && sudo systemctl enable --now murojaat-bot
+# =====================================================================
+[Unit]
+Description=Murojaat boti (Ta'lim fakulteti dekanati)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=murojaat
+Group=murojaat
+WorkingDirectory=/opt/murojaat-bot
+EnvironmentFile=/opt/murojaat-bot/.env
+ExecStart=/usr/bin/node src/index.js
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=murojaat-bot
+
+# ---- Xavfsizlik cheklovlari (systemd sandbox) ----
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ReadWritePaths=/opt/murojaat-bot/data
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallFilter=@system-service
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

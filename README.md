@@ -18,6 +18,19 @@ public/
 data.json            # (avtomatik yaratiladi) — real ma'lumotlar shu yerda
 ```
 
+## Loyiha tarkibi
+
+Repozitoriyda ikkita mustaqil ilova bor:
+
+| Papka | Nima |
+|---|---|
+| `/` (shu yerda) | **Tashkiliy tuzilma sayti** — Node + Express, `data.json` |
+| `murojaat-bot/` | **Murojaat boti** — Ta'lim fakulteti dekanati uchun Telegram bot + yopiq admin panel ([qo'llanma](murojaat-bot/README.md)) |
+
+Ular alohida ishga tushadi va bir-biriga bog'liq emas.
+
+---
+
 ## 1) Lokal ishga tushirish
 ```bash
 npm install
