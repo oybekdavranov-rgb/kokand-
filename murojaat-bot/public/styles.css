@@ -22,6 +22,7 @@
   --answered:      #0f7a46;
   --closed:        #64748b;
   --danger:        #c62828;
+  --late:          #b4280f;
   --danger-soft:   rgba(198, 40, 40, .10);
   --shadow-sm:     0 1px 2px rgba(16, 26, 45, .06), 0 1px 3px rgba(16, 26, 45, .04);
   --shadow-md:     0 4px 16px rgba(16, 26, 45, .08), 0 1px 3px rgba(16, 26, 45, .05);
@@ -52,6 +53,7 @@ html[data-theme="dark"] {
   --answered:      #3cc98a;
   --closed:        #8595ad;
   --danger:        #ff7a7a;
+  --late:          #ff9b6a;
   --danger-soft:   rgba(255, 122, 122, .12);
   --shadow-sm:     0 1px 2px rgba(0, 0, 0, .4);
   --shadow-md:     0 6px 20px rgba(0, 0, 0, .45);
@@ -213,10 +215,17 @@ button, input, select, textarea { font: inherit; color: inherit; }
 /* ----------------------------- Statistika --------------------------- */
 .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
 .stat {
+  display: block; width: 100%; text-align: left; font: inherit; color: inherit;
   padding: 14px 16px; background: var(--surface);
   border: 1px solid var(--border); border-radius: var(--radius);
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow-sm); cursor: pointer;
+  transition: border-color .15s, transform .1s;
 }
+.stat:hover { border-color: var(--brand); }
+.stat:active { transform: translateY(1px); }
+.stat--late .stat__dot { background: var(--late); }
+.stat--warn { border-color: var(--late); }
+.stat--warn .stat__value { color: var(--late); }
 .stat__value { font-size: 26px; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
 .stat__label { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--text-muted); margin-top: 2px; }
 .stat__dot { width: 8px; height: 8px; border-radius: 50%; background: var(--closed); }
@@ -226,9 +235,11 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .stat--day   .stat__dot { background: var(--brand); }
 
 /* ----------------------------- Asboblar ----------------------------- */
-.toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.toolbar { display: grid; gap: 10px; }
+.toolbar__row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.toolbar__row--filters { align-items: center; }
 .searchbox {
-  display: flex; align-items: center; gap: 9px; flex: 1 1 260px; min-width: 220px;
+  display: flex; align-items: center; gap: 9px; flex: 1 1 420px; min-width: 240px;
   padding: 0 12px; background: var(--surface);
   border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
   color: var(--text-muted); box-shadow: var(--shadow-sm);
@@ -396,6 +407,57 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .modal__text { font-size: 14px; color: var(--text-muted); }
 .modal__fields { display: grid; gap: 10px; }
 .modal__actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.modal__cancel { order: 1; }
+.modal__ok { order: 2; }
+
+
+/* ------------------------- Sana oralig'i filtri --------------------- */
+.daterange { display: flex; align-items: center; gap: 6px; }
+.daterange__dash { color: var(--text-muted); }
+.input--date { width: auto; min-width: 140px; padding: 8px 10px; font-size: 13px; }
+.chip--late { display: inline-flex; align-items: center; gap: 6px; }
+.chip--late.is-active { background: color-mix(in srgb, var(--late) 16%, transparent); color: var(--late); border-color: transparent; }
+.badge--late { background: color-mix(in srgb, var(--late) 16%, transparent); color: var(--late); }
+.badge--late .icon { width: 13px; height: 13px; }
+
+/* ----------------------------- Ichki izoh --------------------------- */
+.note {
+  padding: 11px 13px; border-radius: var(--radius-sm);
+  background: var(--surface-3); border: 1px dashed var(--border-strong);
+}
+.textarea--sm { min-height: 64px; font-size: 14px; }
+
+/* --------------------------- Muallif tarixi ------------------------- */
+.history { display: grid; gap: 6px; }
+.history__item {
+  display: grid; grid-template-columns: auto auto 1fr auto; align-items: center; gap: 8px;
+  width: 100%; padding: 8px 10px; text-align: left; font: inherit; color: inherit;
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); cursor: pointer;
+}
+.history__item:hover { border-color: var(--brand); }
+.history__code { font-family: var(--mono); font-size: 12px; color: var(--brand); }
+.history__text { font-size: 13px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.history__date { font-size: 11.5px; color: var(--text-muted); white-space: nowrap; }
+@media (max-width: 560px) {
+  .history__item { grid-template-columns: auto 1fr; }
+  .history__text, .history__date { grid-column: 1 / -1; white-space: normal; }
+}
+
+/* ---------------------------- Rasm ko'rinishi ----------------------- */
+.preview {
+  width: 100%; max-height: 320px; object-fit: contain;
+  background: var(--surface-3); border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+/* --------------------------- 2FA kaliti ----------------------------- */
+.keybox {
+  padding: 12px; border-radius: var(--radius-sm);
+  background: var(--surface-3); border: 1px dashed var(--border-strong);
+  font-family: var(--mono); font-size: 15px; letter-spacing: .08em;
+  text-align: center; user-select: all; overflow-wrap: anywhere;
+}
 
 /* ------------------------------- Mobil ------------------------------ */
 @media (max-width: 1149px) {

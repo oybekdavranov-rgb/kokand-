@@ -22,6 +22,9 @@ COPY scripts ./scripts
 # Ma'lumotlar doimiy jildda (volume) saqlanadi
 RUN mkdir -p /data && chown -R node:node /data /app
 ENV DATA_DIR=/data
+# Konteyner ichida barcha interfeyslarda tinglaymiz; tashqariga faqat
+# docker-compose'dagi 127.0.0.1:8080 bog'lanishi chiqadi.
+ENV HOST=0.0.0.0
 VOLUME ["/data"]
 USER node
 EXPOSE 8080

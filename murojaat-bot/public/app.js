@@ -13,7 +13,9 @@
     user: null,
     office: null,
     view: 'appeals',
-    filter: { status: '', search: '', offset: 0, limit: 25 },
+    filter: { status: '', search: '', from: '', to: '', overdue: false, offset: 0, limit: 25 },
+    totpEnabled: false,
+    slaHours: 48,
     rows: [],
     total: 0,
     selected: null,
@@ -78,6 +80,9 @@
     return fmtDate(ms);
   }
 
+  const isOverdue = (row) =>
+    ['new', 'in_progress'].includes(row.status) && Date.now() - row.createdAt > state.slaHours * 3600_000;
+
   function fmtBytes(size) {
     if (!size) return '';
     const units = ['B', 'KB', 'MB', 'GB'];
@@ -99,7 +104,7 @@
    * Tasdiqlash oynasi. fields: [{name,label,type,placeholder}]
    * @returns {Promise<null|Object>} null — bekor qilindi
    */
-  function ask({ title, text = '', okLabel = 'Tasdiqlash', danger = false, fields = [] }) {
+  function ask({ title, text = '', note = '', okLabel = 'Tasdiqlash', danger = false, fields = [] }) {
     const modal = $('modal');
     $('modal-title').textContent = title;
     $('modal-text').textContent = text;
@@ -110,6 +115,7 @@
 
     const box = clear($('modal-fields'));
     const inputs = {};
+    if (note) box.append(el('div', { class: 'keybox', text: note }));
     for (const field of fields) {
       const input = el('input', { class: 'input', type: field.type || 'text', placeholder: field.placeholder || '', autocomplete: field.autocomplete || 'off' });
       inputs[field.name] = input;
@@ -165,6 +171,14 @@
   /* ------------------------------------------------------------------ */
   /* Kirish / chiqish                                                    */
   /* ------------------------------------------------------------------ */
+  function applyMe(me) {
+    if (!me) return;
+    if (me.office) applyOffice(me.office);
+    state.totpEnabled = !!me.totpEnabled;
+    if (me.limits && me.limits.slaHours) state.slaHours = me.limits.slaHours;
+    updateTotpLabel();
+  }
+
   function applyOffice(office) {
     if (!office) return;
     state.office = office;
@@ -196,6 +210,8 @@
       $('office-line').textContent = `${state.office.faculty} · ${state.office.deanTitle} ${state.office.dean}`;
     }
     document.body.classList.remove('detail-open');
+    updateTotpLabel();
+    syncFilterUi();
     startAutoRefresh();
     openFromHash();
   }
@@ -216,7 +232,7 @@
       state.csrf = result.csrf;
       state.user = result.user;
       const me = await api('/api/me');
-      state.office = me.office;
+      applyMe(me);
       $('login-error').hidden = true;
       showApp();
       await refresh(true);
@@ -228,6 +244,67 @@
     } finally {
       button.disabled = false;
     }
+  });
+
+  /* --- Ikki qadamli kirish (TOTP) --- */
+  function updateTotpLabel() {
+    $('totp-label').textContent = state.totpEnabled
+      ? 'Ikki qadamli kirishni o\'chirish'
+      : 'Ikki qadamli kirishni yoqish';
+  }
+
+  $('totp-toggle').addEventListener('click', async () => {
+    $('user-pop').hidden = true;
+    try {
+      if (state.totpEnabled) {
+        const values = await ask({
+          title: 'Ikki qadamli kirishni o\'chirish',
+          text: 'Tasdiqlash uchun parolingizni kiriting. Keyin kirish faqat parol bilan bo\'ladi.',
+          okLabel: 'O\'chirish',
+          danger: true,
+          fields: [{ name: 'password', label: 'Parol', type: 'password', autocomplete: 'current-password' }],
+        });
+        if (!values) return;
+        const result = await api('/api/totp/disable', { method: 'POST', body: { password: values.password } });
+        state.totpEnabled = false;
+        updateTotpLabel();
+        toast(result.message || 'O\'chirildi.', 'ok');
+        return;
+      }
+
+      const first = await ask({
+        title: 'Ikki qadamli kirishni yoqish',
+        text: 'Avval parolingizni tasdiqlang. So\'ng telefoningizdagi Google Authenticator (yoki shunga o\'xshash) ilovaga kalitni kiritasiz.',
+        okLabel: 'Davom etish',
+        fields: [{ name: 'password', label: 'Parol', type: 'password', autocomplete: 'current-password' }],
+      });
+      if (!first) return;
+
+      const setup = await api('/api/totp/init', { method: 'POST', body: { password: first.password } });
+      const second = await ask({
+        title: 'Kalitni ilovaga kiriting',
+        text: 'Authenticator ilovasida «Kalitni qo\'lda kiritish» (Enter a setup key) ni tanlang va quyidagi kalitni yozing. So\'ng ilova ko\'rsatgan 6 xonali kodni kiriting.',
+        note: setup.formatted,
+        okLabel: 'Yoqish',
+        fields: [{ name: 'code', label: '6 xonali kod', type: 'text', placeholder: '000000', autocomplete: 'one-time-code' }],
+      });
+      if (!second) return;
+
+      const result = await api('/api/totp/enable', { method: 'POST', body: { secret: setup.secret, code: second.code } });
+      state.totpEnabled = true;
+      updateTotpLabel();
+      toast(result.message || 'Yoqildi.', 'ok');
+    } catch (err) { toast(err.message, 'error'); }
+  });
+
+  $('send-digest').addEventListener('click', async () => {
+    $('user-pop').hidden = true;
+    try {
+      const result = await api('/api/digest', { method: 'POST' });
+      toast(result.sent
+        ? `Kunlik xulosa yuborildi (${result.overdue ?? 0} ta kechikkan murojaat).`
+        : 'Yuborilmadi: xabarnoma chati sozlanmagan (NOTIFY_CHAT_IDS).', result.sent ? 'ok' : 'error');
+    } catch (err) { toast(err.message, 'error'); }
   });
 
   $('logout').addEventListener('click', async () => {
@@ -285,20 +362,44 @@
   /* ------------------------------------------------------------------ */
   function renderStats(stats) {
     const tiles = [
-      { key: 'total', label: 'Jami murojaat', cls: '' },
-      { key: 'new', label: 'Yangi', cls: 'stat--new' },
-      { key: 'inProgress', label: "Ko'rilmoqda", cls: 'stat--prog' },
-      { key: 'answered', label: 'Javob berilgan', cls: 'stat--ans' },
-      { key: 'last24h', label: 'Oxirgi 24 soat', cls: 'stat--day' },
-      { key: 'authors', label: 'Murojaat qiluvchilar', cls: '' },
+      { key: 'total', label: 'Jami murojaat', cls: '', filter: {} },
+      { key: 'new', label: 'Yangi', cls: 'stat--new', filter: { status: 'new' } },
+      { key: 'inProgress', label: "Ko'rilmoqda", cls: 'stat--prog', filter: { status: 'in_progress' } },
+      { key: 'answered', label: 'Javob berilgan', cls: 'stat--ans', filter: { status: 'answered' } },
+      { key: 'overdue', label: `Kechikkan (${state.slaHours} soat+)`, cls: 'stat--late', filter: { overdue: true } },
+      { key: 'last24h', label: 'Oxirgi 24 soat', cls: 'stat--day', filter: {} },
     ];
     const box = clear($('stats'));
     for (const tile of tiles) {
-      box.append(el('div', { class: 'stat ' + tile.cls }, [
-        el('div', { class: 'stat__value', text: String(stats[tile.key] ?? 0) }),
+      const value = stats[tile.key] ?? 0;
+      const node = el('button', {
+        class: 'stat ' + tile.cls + (tile.key === 'overdue' && value > 0 ? ' stat--warn' : ''),
+        type: 'button',
+        title: 'Shu bo\'yicha filtrlash',
+      }, [
+        el('div', { class: 'stat__value', text: String(value) }),
         el('div', { class: 'stat__label' }, [el('i', { class: 'stat__dot' }), tile.label]),
-      ]));
+      ]);
+      node.addEventListener('click', () => {
+        state.filter.status = tile.filter.status || '';
+        state.filter.overdue = !!tile.filter.overdue;
+        syncFilterUi();
+        refresh(true);
+      });
+      box.append(node);
     }
+  }
+
+  /* Filtr holatini tugmalar bilan moslashtirish */
+  function syncFilterUi() {
+    for (const chip of $('status-chips').children) {
+      chip.classList.toggle('is-active', chip.dataset.status === state.filter.status);
+    }
+    $('overdue-chip').classList.toggle('is-active', state.filter.overdue);
+    $('from-date').value = state.filter.from;
+    $('to-date').value = state.filter.to;
+    const active = state.filter.status || state.filter.overdue || state.filter.from || state.filter.to || state.filter.search;
+    $('clear-filters').hidden = !active;
   }
 
   /* ------------------------------------------------------------------ */
@@ -306,13 +407,14 @@
   /* ------------------------------------------------------------------ */
   function renderList() {
     const list = clear($('list'));
+    const filtered = !!(state.filter.search || state.filter.status || state.filter.overdue || state.filter.from || state.filter.to);
     $('list-count').textContent = state.total
-      ? `${state.total} ta murojaat` + (state.filter.search || state.filter.status ? ' (filtr bo\'yicha)' : '')
-      : 'Murojaat yo\'q';
+      ? `${state.total} ta murojaat` + (filtered ? ' (filtr bo\'yicha)' : '')
+      : (filtered ? 'Filtrga mos murojaat yo\'q' : 'Murojaat yo\'q');
 
     if (!state.rows.length) {
-      list.append(el('li', { class: 'empty', text: state.filter.search || state.filter.status
-        ? 'Filtrga mos murojaat topilmadi.'
+      list.append(el('li', { class: 'empty', text: filtered
+        ? 'Filtrga mos murojaat topilmadi. «Filtrni tozalash» tugmasi hammasini qaytaradi.'
         : 'Hali murojaat kelmagan. Bot ishga tushgan bo\'lsa, birinchi murojaat shu yerda paydo bo\'ladi.' }));
     }
 
@@ -321,6 +423,8 @@
       const meta = [];
       if (row.attachmentsCount) meta.push(el('span', {}, [icon('clip'), String(row.attachmentsCount)]));
       if (row.repliesCount) meta.push(el('span', {}, [icon('chat'), String(row.repliesCount)]));
+      if (row.notesCount) meta.push(el('span', {}, [icon('note'), String(row.notesCount)]));
+      if (isOverdue(row)) meta.push(el('span', { class: 'badge badge--late' }, [icon('alert'), 'kechikkan']));
       if (row.authorPhone) meta.push(el('span', {}, [icon('phone'), row.authorPhone]));
       if (row.authorBlocked) meta.push(el('span', { class: 'badge badge--danger', text: 'bloklangan' }));
 
@@ -359,6 +463,21 @@
   /* ------------------------------------------------------------------ */
   /* Tafsilot                                                            */
   /* ------------------------------------------------------------------ */
+  /** Rasmni xavfsiz ko'rsatish: blob sifatida yuklaymiz (bot tokeni ishtirok etmaydi) */
+  async function loadPreview(attachmentId, imgNode) {
+    try {
+      const response = await fetch('/api/attachments/' + attachmentId, { credentials: 'same-origin', cache: 'no-store' });
+      if (!response.ok) throw new Error('yuklanmadi');
+      const blob = await response.blob();
+      if (!/^image\//.test(blob.type) && blob.size > 12 * 1024 * 1024) throw new Error('juda katta');
+      const url = URL.createObjectURL(blob);
+      imgNode.src = url;
+      imgNode.addEventListener('load', () => setTimeout(() => URL.revokeObjectURL(url), 30_000), { once: true });
+    } catch {
+      imgNode.remove();
+    }
+  }
+
   async function openDetail(id) {
     state.selected = id;
     renderList();
@@ -378,7 +497,7 @@
   }
 
   function renderDetail(data) {
-    const { appeal, author, attachments, replies } = data;
+    const { appeal, author, attachments, replies, notes = [], authorHistory = [] } = data;
     const panel = clear($('detail'));
     panel.hidden = false;
     document.body.classList.add('detail-open');
@@ -388,6 +507,8 @@
     panel.append(el('div', { class: 'detail__head' }, [
       el('span', { class: 'detail__code', text: appeal.code }),
       el('span', { class: 'badge ' + status.badge, text: status.label }),
+      isOverdue(appeal) ? el('span', { class: 'badge badge--late' }, [icon('alert'), 'kechikkan']) : null,
+      appeal.deletedAt ? el('span', { class: 'badge badge--danger', text: 'arxivlangan' }) : null,
       el('button', { class: 'btn btn--ghost btn--icon detail__close', type: 'button', title: 'Yopish', 'aria-label': 'Yopish', onClick: closeDetail }, [icon('close')]),
     ]));
 
@@ -442,6 +563,12 @@
           el('span', { text: file.fileName || file.kind }),
           el('span', { class: 'file__size', text: fmtBytes(file.fileSize) }),
         ]));
+        /* Rasmni darhol ko'rish — fayl sessiya orqali olinadi va blob sifatida ko'rsatiladi */
+        if (file.kind === 'photo' || (file.mimeType || '').startsWith('image/')) {
+          const preview = el('img', { class: 'preview', alt: file.fileName || 'rasm', loading: 'lazy' });
+          files.append(preview);
+          loadPreview(file.id, preview);
+        }
       }
       panel.append(el('div', { class: 'detail__section' }, [
         el('div', { class: 'detail__label', text: `Ilovalar (${attachments.length})` }), files,
@@ -468,6 +595,70 @@
       ]));
     }
 
+    /* Muallifning oldingi murojaatlari */
+    if (authorHistory.length) {
+      const history = el('div', { class: 'history' });
+      for (const item of authorHistory) {
+        const status = STATUS[item.status] || { label: item.status, badge: '' };
+        const row = el('button', { class: 'history__item', type: 'button' }, [
+          el('span', { class: 'history__code', text: item.code }),
+          el('span', { class: 'badge ' + status.badge, text: status.label }),
+          el('span', { class: 'history__text', text: item.body }),
+          el('span', { class: 'history__date', text: fmtDate(item.createdAt) }),
+        ]);
+        row.addEventListener('click', () => openDetail(item.id));
+        history.append(row);
+      }
+      panel.append(el('div', { class: 'detail__section' }, [
+        el('div', { class: 'detail__label' }, [icon('history'), ` Shu odamning oldingi murojaatlari (${authorHistory.length})`]),
+        history,
+      ]));
+    }
+
+    /* Ichki izohlar — foydalanuvchiga yuborilmaydi */
+    const notesList = el('div', { class: 'thread' });
+    const notesLabel = el('div', { class: 'detail__label' });
+    const renderNotes = (items) => {
+      notesLabel.textContent = `Ichki izohlar (${items.length}) — murojaat egasi ko'rmaydi`;
+      clear(notesList);
+      if (!items.length) notesList.append(el('p', { class: 'muted', text: 'Hozircha izoh yo\'q.' }));
+      for (const note of items) {
+        notesList.append(el('div', { class: 'note' }, [
+          el('div', { class: 'reply__head' }, [
+            el('strong', { text: note.author }),
+            el('span', { text: fmtDate(note.createdAt) }),
+          ]),
+          el('div', { class: 'reply__body', text: note.body }),
+        ]));
+      }
+    };
+    renderNotes(notes);
+
+    const noteInput = el('textarea', { class: 'textarea textarea--sm', placeholder: 'Ichki izoh… (masalan: o\'quv bo\'limiga yuborildi)', maxlength: '2000' });
+    const noteButton = el('button', { class: 'btn btn--sm', type: 'button' }, [icon('note'), el('span', { text: 'Izoh qo\'shish' })]);
+    const addNote = async () => {
+      const body = noteInput.value.trim();
+      if (body.length < 2) { toast('Izoh matnini yozing.', 'error'); return; }
+      noteButton.disabled = true;
+      try {
+        const result = await api(`/api/appeals/${appeal.id}/notes`, { method: 'POST', body: { body } });
+        notes.push(result.note);
+        renderNotes(notes);
+        noteInput.value = '';
+        toast('Izoh qo\'shildi.', 'ok');
+        refresh();
+      } catch (err) { toast(err.message, 'error'); }
+      finally { noteButton.disabled = false; }
+    };
+    noteButton.addEventListener('click', addNote);
+    noteInput.addEventListener('keydown', (event) => { if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) { event.preventDefault(); addNote(); } });
+
+    panel.append(el('div', { class: 'detail__section' }, [
+      notesLabel,
+      notesList,
+      el('div', { class: 'composer' }, [noteInput, el('div', { class: 'composer__foot' }, [noteButton])]),
+    ]));
+
     /* Javob yozish */
     const textarea = el('textarea', { class: 'textarea', placeholder: 'Javob matnini yozing… (Ctrl+Enter — yuborish)', maxlength: '3500' });
     const counter = el('span', { class: 'composer__count', text: '0 / 3500' });
@@ -485,7 +676,11 @@
         await openDetail(appeal.id);
       } catch (err) {
         toast(err.message, 'error');
+        /* 502 — javob BAZAGA saqlangan, faqat Telegram'ga yetmagan.
+           Tafsilotni yangilaymiz: operator takror yozib yubormasin. */
+        if (err.status === 502) textarea.value = '';
         await refresh();
+        await openDetail(appeal.id);
       } finally { sendButton.disabled = false; }
     };
     textarea.addEventListener('input', () => { counter.textContent = `${textarea.value.length} / 3500`; });
@@ -508,10 +703,9 @@
       }, [icon('ban'), el('span', { text: author.isBlocked ? 'Blokdan chiqarish' : 'Foydalanuvchini bloklash' })]));
     }
     if (state.user.role === 'owner') {
-      actions.append(el('button', {
-        class: 'btn btn--sm btn--danger', type: 'button', text: 'Murojaatni o\'chirish',
-        onClick: () => deleteAppeal(appeal),
-      }));
+      actions.append(appeal.deletedAt
+        ? el('button', { class: 'btn btn--sm', type: 'button', text: 'Murojaatni tiklash', onClick: () => restoreAppeal(appeal) })
+        : el('button', { class: 'btn btn--sm btn--danger', type: 'button', text: 'Murojaatni o\'chirish', onClick: () => deleteAppeal(appeal) }));
     }
     panel.append(el('div', { class: 'detail__section' }, [el('div', { class: 'detail__label', text: 'Amallar' }), actions]));
     panel.scrollTop = 0;
@@ -548,6 +742,15 @@
     } catch (err) { toast(err.message, 'error'); }
   }
 
+  async function restoreAppeal(appeal) {
+    try {
+      await api(`/api/appeals/${appeal.id}/restore`, { method: 'POST' });
+      toast('Murojaat tiklandi.', 'ok');
+      await refresh();
+      await openDetail(appeal.id);
+    } catch (err) { toast(err.message, 'error'); }
+  }
+
   async function deleteAppeal(appeal) {
     const confirmed = await ask({
       title: 'Murojaatni o\'chirish',
@@ -558,7 +761,7 @@
     if (!confirmed) return;
     try {
       await api(`/api/appeals/${appeal.id}/delete`, { method: 'POST' });
-      toast('Murojaat o\'chirildi.', 'ok');
+      toast('Murojaat arxivga olindi. Kerak bo\'lsa «Tiklash» orqali qaytarasiz.', 'ok');
       closeDetail();
       await refresh();
     } catch (err) { toast(err.message, 'error'); }
@@ -670,20 +873,28 @@
   /* ------------------------------------------------------------------ */
   /* Yangilash                                                           */
   /* ------------------------------------------------------------------ */
-  function exportHref() {
+  /** Hozirgi filtrni URL parametrlariga aylantirish (ro'yxat ham, CSV ham shuni ishlatadi) */
+  function filterParams() {
     const params = new URLSearchParams();
     if (state.filter.status) params.set('status', state.filter.status);
     if (state.filter.search) params.set('search', state.filter.search);
-    const query = params.toString();
+    if (state.filter.from) params.set('from', state.filter.from);
+    if (state.filter.to) params.set('to', state.filter.to);
+    if (state.filter.overdue) params.set('overdue', '1');
+    return params;
+  }
+
+  function exportHref() {
+    const query = filterParams().toString();
     return '/api/export.csv' + (query ? '?' + query : '');
   }
 
   async function refresh(resetPage = false) {
     if (!state.user) return;
     if (resetPage) state.filter.offset = 0;
-    const params = new URLSearchParams({ limit: String(state.filter.limit), offset: String(state.filter.offset) });
-    if (state.filter.status) params.set('status', state.filter.status);
-    if (state.filter.search) params.set('search', state.filter.search);
+    const params = filterParams();
+    params.set('limit', String(state.filter.limit));
+    params.set('offset', String(state.filter.offset));
     try {
       const [list, stats] = await Promise.all([api('/api/appeals?' + params), api('/api/stats')]);
       state.rows = list.rows;
@@ -691,6 +902,11 @@
       renderStats(stats);
       renderList();
       $('export').href = exportHref();
+      /* Oxirgi sahifadagi yozuv o'chirilsa — bo'sh sahifada qolib ketmaslik */
+      if (!list.rows.length && state.filter.offset > 0 && list.total > 0) {
+        state.filter.offset = Math.max(0, (Math.ceil(list.total / state.filter.limit) - 1) * state.filter.limit);
+        return refresh();
+      }
       const newest = state.rows.length ? Math.max(...state.rows.map((row) => row.createdAt)) : 0;
       if (!state.newestSeen) state.newestSeen = newest;
       return newest;
@@ -737,14 +953,40 @@
   $('search').addEventListener('input', (event) => {
     clearTimeout(searchTimer);
     const value = event.target.value;
-    searchTimer = setTimeout(() => { state.filter.search = value.trim(); refresh(true); }, 300);
+    searchTimer = setTimeout(() => { state.filter.search = value.trim(); syncFilterUi(); refresh(true); }, 300);
   });
 
   $('status-chips').addEventListener('click', (event) => {
     const chip = event.target.closest('.chip');
     if (!chip) return;
     state.filter.status = chip.dataset.status;
-    for (const node of $('status-chips').children) node.classList.toggle('is-active', node === chip);
+    syncFilterUi();
+    refresh(true);
+  });
+
+  $('overdue-chip').addEventListener('click', () => {
+    state.filter.overdue = !state.filter.overdue;
+    syncFilterUi();
+    refresh(true);
+  });
+
+  for (const id of ['from-date', 'to-date']) {
+    $(id).addEventListener('change', () => {
+      state.filter.from = $('from-date').value;
+      state.filter.to = $('to-date').value;
+      syncFilterUi();
+      refresh(true);
+    });
+  }
+
+  $('clear-filters').addEventListener('click', () => {
+    state.filter.status = '';
+    state.filter.search = '';
+    state.filter.from = '';
+    state.filter.to = '';
+    state.filter.overdue = false;
+    $('search').value = '';
+    syncFilterUi();
     refresh(true);
   });
 
@@ -798,7 +1040,7 @@
       const me = await api('/api/me');
       state.user = me.user;
       state.csrf = me.csrf;
-      if (me.office) applyOffice(me.office);
+      applyMe(me);
       showApp();
       await refresh(true);
     } catch {

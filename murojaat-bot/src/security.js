@@ -168,8 +168,20 @@ const sanitizeText = (text, maxLength = 4000) => String(text ?? '')
   .trim()
   .slice(0, maxLength);
 
+/**
+ * Matnni XAVFSIZ kesish: emoji (surrogate juftlik) o'rtasidan kesilmaydi.
+ * String.slice() yolg'iz surrogate qoldirishi mumkin — Telegram bunday matnni
+ * "strings must be encoded in UTF-8" deb rad etadi.
+ */
+function cut(text, maxLength, suffix = '…') {
+  const value = String(text ?? '');
+  const chars = Array.from(value);           // kod nuqtalari bo'yicha
+  if (chars.length <= maxLength) return value;
+  return chars.slice(0, maxLength).join('') + suffix;
+}
+
 module.exports = {
-  hashPassword, verifyPassword, safeEqual, randomToken, sha256, keyedHash,
+  hashPassword, verifyPassword, safeEqual, randomToken, sha256, keyedHash, cut,
   verifyTotp, totpCode, generateTotpSecret, base32Decode,
   RateLimiter, serializeCookie, parseCookies, escapeHtml, sanitizeText,
 };

@@ -17,7 +17,7 @@ if (fatal.length) {
 }
 
 const db = require('./db');
-const { bot, setMyCommands } = require('./bot');
+const { bot, setMyCommands, sendDailyDigest } = require('./bot');
 const { createApp } = require('./server');
 
 let server;
@@ -32,6 +32,13 @@ async function main() {
   /* Har 6 soatda eski sessiya/urinishlarni tozalash */
   const cleanup = setInterval(() => { try { db.purgeOld(); } catch (err) { log.warn('tozalash xatosi', { error: String(err.message) }); } }, 6 * 3600_000);
   cleanup.unref();
+
+  /* Kunlik xulosa: har 20 daqiqada tekshiramiz, belgilangan soatda bir marta yuboriladi.
+     (Alohida cron kerak emas — xizmat ishlab tursa, o'zi yuboradi.) */
+  const digest = setInterval(() => {
+    sendDailyDigest().catch((err) => log.warn('kunlik xulosa xatosi', { error: String(err.message) }));
+  }, 20 * 60_000);
+  digest.unref();
 
   /* --- 3. Web server (admin panel + webhook) --- */
   const app = createApp();

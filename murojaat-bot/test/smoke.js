@@ -12,6 +12,8 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { spawn } = require('child_process');
+const { totpCode } = require('../src/security');
+const Database = require('better-sqlite3');
 
 const BOT_TOKEN = '123456789:TEST-TOKEN-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const WEBHOOK_SECRET = crypto.randomBytes(24).toString('hex');
@@ -31,6 +33,7 @@ const section = (title) => console.log('\n── ' + title + ' ' + '─'.repeat(
 
 /* ===================== Soxta Telegram Bot API ======================= */
 const sent = [];        // yuborilgan xabarlar
+const apiCalls = [];    // chaqirilgan Bot API metodlari
 let messageId = 1000;
 
 function mockApi() {
@@ -40,6 +43,7 @@ function mockApi() {
     req.on('end', () => {
       const body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString() || '{}') : {};
       const method = req.url.split('/').pop();
+      apiCalls.push(method);
 
       if (req.url.includes('/file/bot')) {
         res.writeHead(200, { 'Content-Type': 'application/octet-stream' });
@@ -55,9 +59,16 @@ function mockApi() {
       switch (method) {
         case 'getMe':
           return reply({ id: 42, is_bot: true, first_name: 'Murojaat', username: 'murojaat_test_bot', can_join_groups: true, can_read_all_group_messages: false, supports_inline_queries: false });
-        case 'sendMessage':
-          sent.push(body);
-          return reply({ message_id: ++messageId, date: Math.floor(Date.now() / 1000), chat: { id: body.chat_id, type: 'private' }, text: body.text });
+        case 'sendMessage': {
+          if (String(body.chat_id) === '909') {      // "bot bloklangan" holatini taqlid qilamiz
+            res.writeHead(403, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ ok: false, error_code: 403, description: 'Forbidden: bot was blocked by the user' }));
+            return;
+          }
+          const id = ++messageId;
+          sent.push({ ...body, _messageId: id });
+          return reply({ message_id: id, date: Math.floor(Date.now() / 1000), chat: { id: body.chat_id, type: 'private' }, text: body.text });
+        }
         case 'getFile':
           return reply({ file_id: body.file_id, file_unique_id: 'u', file_size: 17, file_path: 'photos/test.jpg' });
         default:
@@ -138,7 +149,7 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     ADMIN_USERNAME: 'admin',
     ADMIN_PASSWORD,
     REQUIRE_HTTPS: 'false',
-    NOTIFY_CHAT_IDS: '999',
+    NOTIFY_CHAT_IDS: '999,998',
     APPEAL_MIN_LENGTH: '12',
     APPEALS_PER_HOUR: '3',
     APPEALS_PER_DAY: '5',
@@ -356,6 +367,359 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     const csv2 = await request('/api/export.csv');
     check('CSV formula injection neytrallangan', csv2.text.includes('"\'=cmd|calc!A1'), csv2.text.split('\n').find((l) => l.includes('cmd|calc')) || '');
 
+    section('Ichki izohlar (dekanat uchun)');
+    sent.length = 0;
+    const note = await request(`/api/appeals/${appeal.id}/notes`, { method: 'POST', body: { body: 'O\'quv bo\'limiga yuborildi, javobni kutyapmiz.' } });
+    check('izoh qo\'shildi', note.status === 200 && note.json.note.author === 'admin');
+    check('izoh foydalanuvchiga YUBORILMAYDI', sent.length === 0, 'yuborilgan xabarlar: ' + sent.length);
+    const withNote = await request('/api/appeals/' + appeal.id);
+    check('izoh tafsilotda ko\'rinadi', withNote.json.notes.length === 1 && withNote.json.notes[0].body.includes('o\'quv bo\'limiga') === false && withNote.json.notes[0].body.includes('O\'quv bo\'limiga'));
+    const listWithNotes = await request('/api/appeals?limit=50');
+    check('ro\'yxatda izoh soni ko\'rinadi', listWithNotes.json.rows.find((r) => r.id === appeal.id).notesCount === 1);
+    const emptyNote = await request(`/api/appeals/${appeal.id}/notes`, { method: 'POST', body: { body: ' ' } });
+    check('bo\'sh izoh qabul qilinmaydi', emptyNote.status === 400);
+
+    section('Muallifning oldingi murojaatlari');
+    const history = await request('/api/appeals/' + appeal.id);
+    check('muallif tarixi qaytadi', Array.isArray(history.json.authorHistory));
+    check('tarixda shu murojaatning o\'zi yo\'q', history.json.authorHistory.every((h) => h.id !== appeal.id));
+    check('muallif murojaatlari soni bor', typeof history.json.author.appeals === 'number' && history.json.author.appeals >= 1);
+
+    section('«Ko\'rib chiqilmoqda» xabarnomasi');
+    const fresh = (await request('/api/appeals?status=new&limit=1')).json.rows[0];
+    sent.length = 0;
+    await request(`/api/appeals/${fresh.id}/status`, { method: 'POST', body: { status: 'in_progress' } });
+    await sleep(250);
+    check('muallifga «ko\'rib chiqilmoqda» xabari ketdi',
+      sent.some((m) => String(m.chat_id) === String(fresh.tgId) && String(m.text).includes('ko\'rib chiqilmoqda')),
+      JSON.stringify(sent).slice(0, 150));
+    sent.length = 0;
+    await request(`/api/appeals/${fresh.id}/status`, { method: 'POST', body: { status: 'new' } });
+    await request(`/api/appeals/${fresh.id}/status`, { method: 'POST', body: { status: 'in_progress' } });
+    await sleep(250);
+    check('xabar faqat BIR marta yuboriladi (takrorlanmaydi)', !sent.some((m) => String(m.text).includes('ko\'rib chiqilmoqda')));
+
+    section('Kechikkan murojaatlar va sana filtri');
+    /* Bitta murojaatni "eski" qilib qo'yamiz (3 kun oldin) */
+    const direct = new Database(path.join(dataDir, 'murojaat.db'));
+    const threeDaysAgo = Date.now() - 3 * 24 * 3600_000;
+    direct.prepare('UPDATE appeals SET created_at = ?, status = ? WHERE id = ?').run(threeDaysAgo, 'new', fresh.id);
+    direct.close();
+    const overdue = await request('/api/appeals?overdue=1');
+    check('kechikkanlar filtri ishlaydi', overdue.status === 200 && overdue.json.rows.length >= 1 && overdue.json.rows.every((r) => ['new', 'in_progress'].includes(r.status)));
+    check('kechikkan murojaat ro\'yxatda', overdue.json.rows.some((r) => r.id === fresh.id));
+    const statsNow = await request('/api/stats');
+    check('statistikada kechikkanlar soni bor', typeof statsNow.json.overdue === 'number' && statsNow.json.overdue >= 1);
+
+    const todayLocal = new Date(Date.now() + 5 * 3600_000).toISOString().slice(0, 10);
+    const todayOnly = await request(`/api/appeals?from=${todayLocal}&to=${todayLocal}`);
+    check('sana oralig\'i filtri ishlaydi (bugun)', todayOnly.status === 200 && todayOnly.json.rows.every((r) => r.id !== fresh.id));
+    const badDate = await request('/api/appeals?from=keraksiz-matn');
+    check('noto\'g\'ri sana e\'tiborsiz qoldiriladi', badDate.status === 200);
+    const csvFiltered = await request('/api/export.csv?overdue=1');
+    check('CSV ham filtrni qo\'llaydi', csvFiltered.status === 200 && csvFiltered.text.includes(fresh.code));
+
+    section('Qidiruvda % va _ belgilari (LIKE ESCAPE)');
+    sent.length = 0;
+    await sendUpdate(textUpdate('Stipendiya 100% to\'landi deb aytishdi, lekin kelmadi.', { id: 801, first_name: 'Foiz' }));
+    await sleep(200);
+    const pctSearch = await request('/api/appeals?search=' + encodeURIComponent('100%'));
+    check('"100%" qidiruvi aniq natija beradi', pctSearch.json.total === 1 && pctSearch.json.rows[0].body.includes('100%'));
+    const wildcard = await request('/api/appeals?search=' + encodeURIComponent('%'));
+    check('"%" joker sifatida ishlamaydi', wildcard.json.total === 1);
+    const underscore = await request('/api/appeals?search=' + encodeURIComponent('_'));
+    const allCount = (await request('/api/appeals?limit=100')).json.total;
+    /* "_" joker bo'lsa HAMMA qator qaytardi; to'g'ri ishlasa faqat tarkibida "_" borlari */
+    check('"_" joker sifatida ishlamaydi',
+      underscore.json.total < allCount &&
+      underscore.json.rows.every((r) => `${r.body}${r.authorUsername || ''}${r.authorName || ''}${r.code}`.includes('_')),
+      `topildi ${underscore.json.total} / jami ${allCount}`);
+
+    section('Kunlik xulosa (dekanat chatiga)');
+    sent.length = 0;
+    const digest = await request('/api/digest', { method: 'POST' });
+    await sleep(200);
+    check('kunlik xulosa yuborildi', digest.status === 200 && digest.json.sent === true);
+    const digestMessage = sent.find((m) => String(m.chat_id) === '999' && String(m.text).includes('Kunlik xulosa'));
+    check('xulosada kechikkan murojaat ko\'rsatilgan', !!digestMessage && digestMessage.text.includes(fresh.code), digestMessage ? 'topilmadi: kod' : 'xabar yo\'q');
+
+    section('Telegram orqali boshqarish (dekanat chati)');
+    sent.length = 0;
+    await sendUpdate({
+      message: {
+        message_id: ++messageId, date: Math.floor(Date.now() / 1000),
+        chat: { id: 999, type: 'group' }, from: { id: 555, is_bot: false, first_name: 'Dekan', username: 'dekan' },
+        text: `/javob ${appeal.code} Telegram orqali yuborilgan javob matni.`,
+      },
+    });
+    await sleep(250);
+    check('/javob buyrug\'i javobni yetkazadi', sent.some((m) => String(m.chat_id) === '777' && String(m.text).includes('Telegram orqali yuborilgan javob')));
+    check('dekanat chatiga tasdiq keldi', sent.some((m) => String(m.chat_id) === '999' && String(m.text).includes('yuborildi')));
+
+    sent.length = 0;
+    await sendUpdate({
+      message: {
+        message_id: ++messageId, date: Math.floor(Date.now() / 1000),
+        chat: { id: 999, type: 'group' }, from: { id: 555, is_bot: false, first_name: 'Dekan' },
+        text: '/statistika',
+      },
+    });
+    await sleep(200);
+    check('/statistika holat ko\'rsatadi', sent.some((m) => String(m.text).includes('Murojaatlar holati') && String(m.text).includes('Kechikkan')));
+
+    sent.length = 0;
+    await sendUpdate({
+      message: {
+        message_id: ++messageId, date: Math.floor(Date.now() / 1000),
+        chat: { id: 1234, type: 'group' }, from: { id: 556, is_bot: false, first_name: 'Begona' },
+        text: `/javob ${appeal.code} Begona chatdan javob urinishi.`,
+      },
+    });
+    await sleep(200);
+    check('begona chatdan /javob ishlamaydi', sent.length === 0, 'yuborilgan: ' + JSON.stringify(sent).slice(0, 100));
+
+    section('Tuzatilgan nuqsonlar: bot oqimlari');
+
+    /* bot-01: dekanning SHAXSIY chatidan "reply" qilib javob berish */
+    sent.length = 0;
+    await sendUpdate(textUpdate('Yotoqxona masalasida yordam so\'rab murojaat qilyapman.', { id: 901, first_name: 'Shaxsiy' }));
+    await sleep(250);
+    const privateNotice = sent.find((m) => String(m.chat_id) === '998' && String(m.text).includes('Yangi murojaat'));
+    check('bot-01: dekanning shaxsiy chatiga xabarnoma keldi', !!privateNotice);
+    sent.length = 0;
+    await sendUpdate({
+      message: {
+        message_id: ++messageId, date: Math.floor(Date.now() / 1000),
+        chat: { id: 998, type: 'private' }, from: { id: 998, is_bot: false, first_name: 'Dekan' },
+        text: 'Yotoqxona bo\'yicha ariza qabul qilindi, ertaga javob beramiz.',
+        reply_to_message: { message_id: privateNotice._messageId, date: 0, chat: { id: 998, type: 'private' }, text: privateNotice.text },
+      },
+    });
+    await sleep(250);
+    check('bot-01: shaxsiy chatdagi javob FUQAROGA yetkazildi',
+      sent.some((m) => String(m.chat_id) === '901' && String(m.text).includes('Yotoqxona bo\'yicha ariza qabul qilindi')),
+      JSON.stringify(sent.map((m) => m.chat_id)));
+    check('bot-01: javob yangi murojaatga aylanmadi',
+      (await request('/api/appeals?search=' + encodeURIComponent('ertaga javob beramiz'))).json.total === 0);
+
+    /* bot-02 / bot-07 / bot-09: albom (caption oxirida keladi) */
+    sent.length = 0;
+    const albumId = 'mg-test-1';
+    const photo = (n) => ([
+      { file_id: `s${n}`, file_unique_id: `us${n}`, width: 90, height: 90, file_size: 800 },
+      { file_id: `b${n}`, file_unique_id: `ub${n}`, width: 1280, height: 960, file_size: 50_000 },
+    ]);
+    for (let i = 1; i <= 3; i++) {
+      await sendUpdate({
+        message: {
+          message_id: ++messageId, date: Math.floor(Date.now() / 1000),
+          chat: { id: 902, type: 'private' }, from: { id: 902, is_bot: false, first_name: 'Albom' },
+          media_group_id: albumId, photo: photo(i),
+          ...(i === 3 ? { caption: 'Imtihon varaqalarining rasmlari ilova qilindi, tekshirib bersangiz.' } : {}),
+        },
+      });
+      await sleep(80);
+    }
+    await sleep(3200);   // albom buferi yopilishini kutamiz
+    const albumAppeal = (await request('/api/appeals?search=' + encodeURIComponent('Imtihon varaqalarining'))).json.rows[0];
+    check('bot-02: albom BITTA murojaat yaratdi', !!albumAppeal && albumAppeal.attachmentsCount === 3,
+      albumAppeal ? 'ilovalar: ' + albumAppeal.attachmentsCount : 'murojaat topilmadi');
+    check('bot-09: tasdiq xabarida fayl soni to\'g\'ri', sent.some((m) => String(m.chat_id) === '902' && String(m.text).includes('3 ta fayl')),
+      JSON.stringify(sent.filter((m) => String(m.chat_id) === '902').map((m) => String(m.text).slice(0, 60))));
+    check('bot-07: albom uchun faqat bitta tasdiq yuborildi',
+      sent.filter((m) => String(m.chat_id) === '902' && String(m.text).includes('qabul qilindi')).length === 1);
+
+    /* bot-07: caption'siz albom — bot jim qolmasligi kerak */
+    sent.length = 0;
+    for (let i = 1; i <= 2; i++) {
+      await sendUpdate({
+        message: {
+          message_id: ++messageId, date: Math.floor(Date.now() / 1000),
+          chat: { id: 903, type: 'private' }, from: { id: 903, is_bot: false, first_name: 'Jim' },
+          media_group_id: 'mg-test-2', photo: photo(10 + i),
+        },
+      });
+      await sleep(80);
+    }
+    await sleep(3200);
+    check('bot-07: izohsiz albomga javob beriladi',
+      sent.some((m) => String(m.chat_id) === '903' && String(m.text).includes('2 ta fayl qabul qilindi')));
+
+    /* bot-06: takroriy update — bitta murojaat */
+    const dupUpdate = {
+      update_id: 999_111,
+      message: {
+        message_id: 777_001, date: Math.floor(Date.now() / 1000),
+        chat: { id: 904, type: 'private' }, from: { id: 904, is_bot: false, first_name: 'Takror' },
+        text: 'Telegram qayta yuborgan takroriy xabar matni, bitta murojaat bo\'lishi kerak.',
+      },
+    };
+    sent.length = 0;
+    await fetch(BASE + WEBHOOK_PATH, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Telegram-Bot-Api-Secret-Token': WEBHOOK_SECRET }, body: JSON.stringify(dupUpdate) });
+    await sleep(300);
+    await fetch(BASE + WEBHOOK_PATH, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Telegram-Bot-Api-Secret-Token': WEBHOOK_SECRET }, body: JSON.stringify(dupUpdate) });
+    await sleep(300);
+    const dupSearch = await request('/api/appeals?search=' + encodeURIComponent('takroriy xabar matni'));
+    check('bot-06: takroriy update ikkinchi murojaat yaratmadi', dupSearch.json.total === 1, 'topildi: ' + dupSearch.json.total);
+    check('bot-06: ikkinchi tasdiq yuborilmadi',
+      sent.filter((m) => String(m.chat_id) === '904' && String(m.text).includes('qabul qilindi')).length === 1);
+
+    /* bot-03: chegara rad etsa — fayl keyingi murojaatga yopishmaydi */
+    sent.length = 0;
+    for (let i = 0; i < 3; i++) {
+      await sendUpdate(textUpdate(`Chegarani to'ldirish uchun murojaat ${i}.`, { id: 905, first_name: 'Chegara' }));
+      await sleep(70);
+    }
+    await sendUpdate({
+      message: {
+        message_id: ++messageId, date: Math.floor(Date.now() / 1000),
+        chat: { id: 905, type: 'private' }, from: { id: 905, is_bot: false, first_name: 'Chegara' },
+        caption: 'Maxfiy tibbiy ma\'lumotnoma ilova qilindi, ko\'rib chiqing.', photo: photo(20),
+      },
+    });
+    await sleep(250);
+    check('bot-03: chegarada fayl saqlanmagani aytiladi',
+      sent.some((m) => String(m.chat_id) === '905' && String(m.text).includes('fayl')), 'xabar yo\'q');
+    /* vaqtni orqaga surib, chegarani bo'shatamiz va aloqasiz murojaat yuboramiz */
+    const db2 = new Database(path.join(dataDir, 'murojaat.db'));
+    db2.prepare('UPDATE appeals SET created_at = created_at - ? WHERE tg_id = 905').run(2 * 3600_000);
+    db2.close();
+    sent.length = 0;
+    await sendUpdate(textUpdate('Butunlay boshqa mavzu: kutubxona ish vaqti haqida savol.', { id: 905, first_name: 'Chegara' }));
+    await sleep(250);
+    const unrelated = (await request('/api/appeals?search=' + encodeURIComponent('kutubxona ish vaqti'))).json.rows[0];
+    check('bot-03: maxfiy fayl aloqasiz murojaatga qo\'shilmadi', !!unrelated && !unrelated.attachmentsCount,
+      unrelated ? 'ilovalar: ' + unrelated.attachmentsCount : 'murojaat yo\'q');
+
+    /* bot-04: begona kontakt */
+    sent.length = 0;
+    await sendUpdate({
+      message: {
+        message_id: ++messageId, date: Math.floor(Date.now() / 1000),
+        chat: { id: 906, type: 'private' }, from: { id: 906, is_bot: false, first_name: 'Kontakt' },
+        contact: { phone_number: '+998935556677', first_name: 'Begona' },   // user_id YO'Q
+      },
+    });
+    await sleep(200);
+    check('bot-04: begona raqam qabul qilinmaydi',
+      sent.some((m) => String(m.text).includes('o\'z</b> raqamingizni')), JSON.stringify(sent).slice(0, 120));
+    const users906 = (await request('/api/tg-users?limit=200')).json.rows.find((u) => u.tgId === 906);
+    check('bot-04: begona raqam bazaga yozilmadi', !users906 || !users906.phone);
+
+    /* bot-08: emoji chegarasi — xabar to'g'ri UTF-16 bo'lishi kerak */
+    sent.length = 0;
+    await sendUpdate(textUpdate('X'.repeat(1199) + '😀' + 'Y'.repeat(60), { id: 907, first_name: 'Emoji' }));
+    await sleep(250);
+    const notice = sent.find((m) => String(m.chat_id) === '999' && String(m.text).includes('Yangi murojaat'));
+    check('bot-08: dekanat xabarnomasi yuborildi (emoji kesilgan joyda)', !!notice);
+    check('bot-08: xabar matni to\'g\'ri UTF-16 (yolg\'iz surrogate yo\'q)',
+      !!notice && (!notice.text.isWellFormed || notice.text.isWellFormed()));
+
+    /* bot-10: o'chirilgan murojaat ustida inline tugma */
+    const toDelete = (await request('/api/appeals?limit=1')).json.rows[0];
+    await request(`/api/appeals/${toDelete.id}/delete`, { method: 'POST' });
+    await sendUpdate({
+      callback_query: {
+        id: 'cb-1', from: { id: 555, is_bot: false, first_name: 'Dekan' },
+        message: { message_id: ++messageId, date: 0, chat: { id: 999, type: 'group' }, text: 'xabarnoma' },
+        chat_instance: 'x', data: `st:${toDelete.id}:closed`,
+      },
+    });
+    await sleep(200);
+    const afterDelete = await request('/api/appeals/' + toDelete.id);
+    check('bot-10: o\'chirilgan murojaat holati o\'zgartirilmadi', afterDelete.json.appeal.status === toDelete.status);
+    await request(`/api/appeals/${toDelete.id}/restore`, { method: 'POST' });
+
+    /* bot-11: begona chatdan callback — javob beriladi (tugma muzlab qolmaydi) */
+    apiCalls.length = 0;
+    await sendUpdate({
+      callback_query: {
+        id: 'cb-2', from: { id: 557, is_bot: false, first_name: 'Begona' },
+        message: { message_id: ++messageId, date: 0, chat: { id: -100555, type: 'group' }, text: 'xabarnoma' },
+        chat_instance: 'y', data: 'st:1:closed',
+      },
+    });
+    await sleep(200);
+    check('bot-11: begona chatdagi tugmaga javob qaytarildi', apiCalls.includes('answerCallbackQuery'), JSON.stringify(apiCalls));
+
+    section('Tuzatilgan nuqsonlar: panel va javob yetkazish');
+
+    /* fe-04: uzun javob (HTML qochirishdan keyin 4096 dan oshadi) bo'laklab yuboriladi */
+    sent.length = 0;
+    const longBody = '"'.repeat(1200) + ' uzun javob matni ' + 'x'.repeat(1500);
+    const longReply = await request(`/api/appeals/${appeal.id}/reply`, { method: 'POST', body: { body: longBody } });
+    await sleep(200);
+    const pieces = sent.filter((m) => String(m.chat_id) === '777');
+    check('fe-04: uzun javob yuborildi', longReply.status === 200 && pieces.length >= 1, 'status=' + longReply.status);
+    check('fe-04: har bir xabar Telegram chegarasidan kichik',
+      pieces.length > 0 && pieces.every((m) => String(m.text).length <= 4096),
+      'uzunliklar: ' + pieces.map((m) => String(m.text).length).join(', '));
+    check('fe-04: javob matni to\'liq yetkazildi',
+      pieces.map((m) => String(m.text)).join('').includes('uzun javob matni'));
+
+    /* fe-02: javob yetkazilmasa — 502, lekin javob bazada saqlanadi */
+    sent.length = 0;
+    await sendUpdate(textUpdate('Botni bloklagan foydalanuvchining murojaati matni.', { id: 909, first_name: 'Bloklagan' }));
+    await sleep(250);
+    const blockedAppeal = (await request('/api/appeals?search=' + encodeURIComponent('Botni bloklagan'))).json.rows[0];
+    check('fe-02: bot bloklangan bo\'lsa ham murojaat saqlanadi', !!blockedAppeal);
+    const failedReply = await request(`/api/appeals/${blockedAppeal.id}/reply`, { method: 'POST', body: { body: 'Yetkazilmaydigan javob.' } });
+    check('fe-02: yetkazilmagan javob 502 qaytaradi', failedReply.status === 502 && failedReply.json.error === 'delivery_failed');
+    const failedDetail = await request('/api/appeals/' + blockedAppeal.id);
+    check('fe-02: javob bazada "yetkazilmadi" deb saqlanadi',
+      failedDetail.json.replies.length === 1 && failedDetail.json.replies[0].delivered === false && !!failedDetail.json.replies[0].deliveryError);
+    check('fe-02: yetkazilmagan javobdan keyin holat "answered" bo\'lmaydi', failedDetail.json.appeal.status !== 'answered');
+
+    /* fe-05: arxivlangan murojaat */
+    const archived = (await request('/api/appeals?limit=1&offset=1')).json.rows[0];
+    await request(`/api/appeals/${archived.id}/delete`, { method: 'POST' });
+    const archStatus = await request(`/api/appeals/${archived.id}/status`, { method: 'POST', body: { status: 'closed' } });
+    check('fe-05: arxivlangan murojaat holati o\'zgartirilmaydi', archStatus.status === 400 && archStatus.json.error === 'deleted');
+    const archDetail = await request('/api/appeals/' + archived.id);
+    check('fe-05: owner arxivni ko\'ra oladi va belgisi bor', archDetail.status === 200 && !!archDetail.json.appeal.deletedAt);
+    await request(`/api/appeals/${archived.id}/restore`, { method: 'POST' });
+    check('fe-05: tiklangandan keyin belgi yo\'qoladi', !(await request('/api/appeals/' + archived.id)).json.appeal.deletedAt);
+
+    /* fe-08: "javob berilgan" sanasi holat qaytarilganda tozalanadi */
+    const dateTest = (await request('/api/appeals?limit=1')).json.rows[0];
+    await request(`/api/appeals/${dateTest.id}/status`, { method: 'POST', body: { status: 'answered' } });
+    const answeredAt = (await request('/api/appeals/' + dateTest.id)).json.appeal.answeredAt;
+    await request(`/api/appeals/${dateTest.id}/status`, { method: 'POST', body: { status: 'new' } });
+    const afterBack = (await request('/api/appeals/' + dateTest.id)).json.appeal;
+    check('fe-08: javob sanasi yozildi', !!answeredAt);
+    check('fe-08: holat qaytarilganda javob sanasi tozalanadi', afterBack.answeredAt === null, 'qiymat: ' + afterBack.answeredAt);
+
+    section('Tuzatilgan nuqsonlar: xavfsizlik');
+
+    /* sec-05: juda katta tana → 413 */
+    const huge = await request(`/api/appeals/${appeal.id}/reply`, { method: 'POST', body: { body: 'x'.repeat(80_000) } });
+    check('sec-05: haddan katta so\'rov 413 qaytaradi', huge.status === 413 && huge.json.error === 'payload_too_large', 'status=' + huge.status);
+
+    section('Ikki qadamli kirish (2FA)');
+    const badPass = await request('/api/totp/init', { method: 'POST', body: { password: 'xato-parol' } });
+    check('2FA: xato parol bilan kalit berilmaydi', badPass.status === 401);
+    const init = await request('/api/totp/init', { method: 'POST', body: { password: ADMIN_PASSWORD } });
+    check('2FA: kalit va otpauth havolasi keldi',
+      init.status === 200 && init.json.secret.length >= 16 && init.json.otpauth.startsWith('otpauth://totp/'));
+    const badCode = await request('/api/totp/enable', { method: 'POST', body: { secret: init.json.secret, code: '000000' } });
+    check('2FA: xato kod rad etiladi', badCode.status === 400);
+    const goodCode = totpCode(init.json.secret, Math.floor(Date.now() / 30000));
+    const enabled = await request('/api/totp/enable', { method: 'POST', body: { secret: init.json.secret, code: goodCode } });
+    check('2FA yoqildi', enabled.status === 200);
+
+    const savedCookie = cookie, savedCsrf = csrf;
+    cookie = '';
+    const noCode = await request('/api/login', { method: 'POST', body: { username: 'admin', password: ADMIN_PASSWORD } });
+    check('2FA yoqilgach kodsiz kirish mumkin emas', noCode.status === 401 && noCode.json.error === 'bad_totp');
+    const withCode = await request('/api/login', { method: 'POST', body: { username: 'admin', password: ADMIN_PASSWORD, totp: totpCode(init.json.secret, Math.floor(Date.now() / 30000)) } });
+    check('to\'g\'ri kod bilan kirish ishlaydi', withCode.status === 200);
+    csrf = withCode.json.csrf;
+    const meTotp = await request('/api/me');
+    check('/api/me 2FA holatini bildiradi', meTotp.json.totpEnabled === true);
+    const disabled = await request('/api/totp/disable', { method: 'POST', body: { password: ADMIN_PASSWORD } });
+    check('2FA o\'chirildi', disabled.status === 200);
+    cookie = savedCookie; csrf = savedCsrf;
+
     section('Foydalanuvchini bloklash');
     const block = await request('/api/tg-users/780/block', { method: 'POST', body: { blocked: true, reason: 'spam' } });
     check('bloklash ishlaydi', block.status === 200);
@@ -384,6 +748,9 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     check('operator murojaatni o\'chira olmaydi', (await request(`/api/appeals/${appeal.id}/delete`, { method: 'POST' })).status === 403);
     check('operator admin qo\'sha olmaydi', (await request('/api/admins', { method: 'POST', body: { username: 'x1', password: 'ParolParol2026' } })).status === 403);
     check('operator murojaatlarni ko\'radi', (await request('/api/appeals')).status === 200);
+    check('operator kunlik xulosa yubora olmaydi', (await request('/api/digest', { method: 'POST' })).status === 403);
+    const opNote = await request(`/api/appeals/${appeal.id}/notes`, { method: 'POST', body: { body: 'Operator izohi' } });
+    check('operator ichki izoh yoza oladi', opNote.status === 200);
 
     section('Sessiya xavfsizligi');
     const otherUa = await request('/api/me', { ua: 'boshqa-brauzer/9' });
@@ -399,13 +766,62 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     section('Brute-force qulflash');
     cookie = ''; csrf = '';
     let locked = false;
-    for (let i = 0; i < 12 && !locked; i++) {
-      const attempt = await request('/api/login', { method: 'POST', body: { username: 'admin', password: 'xato' + i } });
+    /* sec-02: registr o'zgartirib qulfni aylanib o'tish MUMKIN EMAS */
+    const variants = ['admin', 'Admin', 'ADMIN', 'aDmIn'];
+    for (let i = 0; i < 16 && !locked; i++) {
+      const attempt = await request('/api/login', { method: 'POST', body: { username: variants[i % variants.length], password: 'xato' + i } });
       locked = attempt.status === 429;
     }
-    check('ko\'p urinishdan keyin kirish qulflanadi', locked);
+    check('sec-02: registr o\'zgarsa ham kirish qulflanadi', locked);
     const afterLock = await request('/api/login', { method: 'POST', body: { username: 'admin', password: ADMIN_PASSWORD } });
     check('qulflanganda to\'g\'ri parol ham o\'tmaydi', afterLock.status === 429);
+
+    section('sec-01/03/04: HTTPS majburiyligi va proksi sarlavhalari');
+    {
+      const probe2 = http.createServer();
+      const port2 = await listen(probe2);
+      await new Promise((r) => probe2.close(r));
+      const dataDir2 = fs.mkdtempSync(path.join(os.tmpdir(), 'murojaat-https-'));
+      const child2 = spawn(process.execPath, [path.join(__dirname, '..', 'src', 'index.js')], {
+        env: { ...env, PORT: String(port2), PUBLIC_URL: `https://127.0.0.1:${port2}`, DATA_DIR: dataDir2, REQUIRE_HTTPS: 'true', TRUST_PROXY: '' },
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      const logs2 = [];
+      child2.stdout.on('data', (c) => logs2.push(c.toString()));
+      child2.stderr.on('data', (c) => logs2.push(c.toString()));
+      const base2 = `http://127.0.0.1:${port2}`;
+      let up = false;
+      for (let i = 0; i < 40 && !up; i++) {
+        try { const r = await fetch(base2 + '/healthz', { redirect: 'manual' }); up = r.status === 200 || r.status === 308; } catch { await sleep(200); }
+      }
+      check('HTTPS rejimidagi instansiya ko\'tarildi', up, logs2.join('').slice(-200));
+
+      const spoofed = await fetch(base2 + '/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Forwarded-Proto': 'https', 'User-Agent': UA },
+        body: JSON.stringify({ username: 'admin', password: ADMIN_PASSWORD }),
+        redirect: 'manual',
+      });
+      check('sec-01: soxta X-Forwarded-Proto HTTPS himoyasini aylanib o\'tolmaydi', spoofed.status === 400, 'status=' + spoofed.status);
+
+      const plain = await fetch(base2 + '/api/login', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'User-Agent': UA },
+        body: JSON.stringify({ username: 'admin', password: ADMIN_PASSWORD }), redirect: 'manual',
+      });
+      check('HTTPSsiz kirish rad etiladi', plain.status === 400);
+
+      const spoofedIp = await fetch(base2 + '/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Forwarded-For': '1.2.3.4', 'X-Forwarded-Proto': 'https', 'User-Agent': UA },
+        body: JSON.stringify({ username: 'admin', password: 'xato' }), redirect: 'manual',
+      });
+      check('sec-04: soxta X-Forwarded-For ishonchsiz manbadan qabul qilinmaydi', spoofedIp.status === 400);
+
+      child2.kill('SIGTERM');
+      await sleep(400);
+      child2.kill('SIGKILL');
+      fs.rmSync(dataDir2, { recursive: true, force: true });
+    }
 
     section('Ma\'lumot fayli huquqlari');
     const mode = fs.statSync(path.join(dataDir, 'murojaat.db')).mode & 0o777;

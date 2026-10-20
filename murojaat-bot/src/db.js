@@ -148,6 +148,27 @@ const MIGRATIONS = [
       updated_at INTEGER NOT NULL
     );
   `),
+
+  /* v2 — dekanat ichki izohlari va foydalanuvchiga holat xabarnomasi belgisi */
+  () => db.exec(`
+    CREATE TABLE notes (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      appeal_id  INTEGER NOT NULL REFERENCES appeals(id) ON DELETE CASCADE,
+      author     TEXT    NOT NULL,
+      body       TEXT    NOT NULL,
+      created_at INTEGER NOT NULL
+    );
+    CREATE INDEX notes_appeal ON notes(appeal_id, created_at);
+
+    ALTER TABLE appeals ADD COLUMN progress_notified_at INTEGER;
+  `),
+
+  /* v3 — bitta Telegram xabaridan ikki murojaat yaratilmasligi uchun indeks.
+     (UNIQUE emas: eski bazalarda allaqachon dublikat bo'lishi mumkin —
+     takrorlanish kodda, tranzaksiya ichida tekshiriladi.) */
+  () => db.exec(`
+    CREATE INDEX IF NOT EXISTS appeals_message ON appeals(tg_id, chat_id, message_id);
+  `),
 ];
 
 function migrate() {
@@ -228,7 +249,16 @@ function nextCode(year) {
 }
 
 /** Murojaat yaratish. Kodni UNIQUE to'qnashuvida qayta urinadi. */
+const stmtFindByMessage = db.prepare(
+  'SELECT * FROM appeals WHERE tg_id = ? AND chat_id = ? AND message_id = ? LIMIT 1');
+
 const createAppeal = db.transaction((data) => {
+  /* Telegram update'ni qayta yuborsa (tarmoq uzilishi, timeout), bitta
+     xabardan ikkita murojaat yaratilmasligi kerak. */
+  if (data.messageId) {
+    const existing = stmtFindByMessage.get(data.tgId, data.chatId, data.messageId);
+    if (existing) return { ...existing, duplicate: true };
+  }
   const year = new Date().getFullYear();
   for (let attempt = 0; attempt < 5; attempt++) {
     const code = attempt === 0 ? nextCode(year) : `MR-${year}-${randomToken(4).slice(0, 5).toUpperCase()}`;
@@ -273,11 +303,16 @@ const countAppealsSince = (tgId, sinceMs) => stmtCountSince.get(tgId, sinceMs).n
 const stmtLastAppealAt = db.prepare('SELECT created_at FROM appeals WHERE tg_id = ? ORDER BY created_at DESC LIMIT 1');
 const lastAppealAt = (tgId) => stmtLastAppealAt.get(tgId)?.created_at || 0;
 
-const stmtSetStatus = db.prepare('UPDATE appeals SET status = ?, updated_at = ?, answered_at = COALESCE(answered_at, ?) WHERE id = ?');
+/* "Javob berilgan" sanasi faqat shu holatda saqlanadi; holat orqaga
+   qaytarilsa tozalanadi — aks holda "Yangi" murojaatda javob sanasi ko'rinadi. */
+const stmtSetStatus = db.prepare(`
+  UPDATE appeals SET status = @status, updated_at = @ts,
+    answered_at = CASE WHEN @status IN ('answered','closed') THEN COALESCE(answered_at, @answeredAt) ELSE NULL END
+  WHERE id = @id`);
 function setAppealStatus(id, status) {
   if (!STATUSES.includes(status)) throw new Error('Noto\'g\'ri status');
   const ts = now();
-  stmtSetStatus.run(status, ts, status === 'answered' ? ts : null, id);
+  stmtSetStatus.run({ status, ts, answeredAt: status === 'answered' ? ts : null, id });
   return getAppeal(id);
 }
 
@@ -297,16 +332,25 @@ const setAppealPhone = (id, phone) => stmtSetAppealPhone.run(phone, id);
  * Murojaatlar ro'yxati — filtr, qidiruv va sahifalash bilan.
  * Qidiruv LIKE orqali; parametrlar bog'langan (injection yo'q).
  */
-function listAppeals({ status = '', search = '', limit = 25, offset = 0, includeDeleted = false } = {}) {
+function listAppeals({ status = '', search = '', limit = 25, offset = 0, includeDeleted = false,
+                      from = null, to = null, overdue = null } = {}) {
   const where = [];
   const params = {};
   if (!includeDeleted) where.push('a.deleted_at IS NULL');
   if (status && STATUSES.includes(status)) { where.push('a.status = @status'); params.status = status; }
   if (search) {
-    where.push(`(a.body LIKE @like OR a.code LIKE @like OR a.author_name LIKE @like
-                 OR a.author_username LIKE @like OR a.author_phone LIKE @like OR CAST(a.tg_id AS TEXT) = @exact)`);
+    /* ESCAPE '\\' bo'lmasa, % va _ belgilari SQLite'da joker sifatida ishlaydi */
+    where.push(`(a.body LIKE @like ESCAPE '\\' OR a.code LIKE @like ESCAPE '\\'
+                 OR a.author_name LIKE @like ESCAPE '\\' OR a.author_username LIKE @like ESCAPE '\\'
+                 OR a.author_phone LIKE @like ESCAPE '\\' OR CAST(a.tg_id AS TEXT) = @exact)`);
     params.like = '%' + String(search).replace(/[%_\\]/g, (m) => '\\' + m) + '%';
     params.exact = String(search).trim();
+  }
+  if (Number.isFinite(from)) { where.push('a.created_at >= @from'); params.from = from; }
+  if (Number.isFinite(to)) { where.push('a.created_at <= @to'); params.to = to; }
+  if (overdue) {
+    where.push("a.status IN ('new','in_progress') AND a.created_at < @overdueBefore");
+    params.overdueBefore = overdue;
   }
   const whereSql = where.length ? 'WHERE ' + where.join(' AND ') : '';
   const total = db.prepare(`SELECT COUNT(*) AS n FROM appeals a ${whereSql}`).get(params).n;
@@ -314,6 +358,7 @@ function listAppeals({ status = '', search = '', limit = 25, offset = 0, include
     SELECT a.*,
            (SELECT COUNT(*) FROM attachments t WHERE t.appeal_id = a.id) AS attachments_count,
            (SELECT COUNT(*) FROM replies r WHERE r.appeal_id = a.id)     AS replies_count,
+           (SELECT COUNT(*) FROM notes n WHERE n.appeal_id = a.id)       AS notes_count,
            u.is_blocked AS author_blocked
     FROM appeals a LEFT JOIN tg_users u ON u.tg_id = a.tg_id
     ${whereSql}
@@ -322,7 +367,7 @@ function listAppeals({ status = '', search = '', limit = 25, offset = 0, include
   return { total, rows };
 }
 
-function stats() {
+function stats(slaMs = 48 * 3600_000) {
   const dayAgo = now() - 24 * 3600_000;
   const base = db.prepare(`SELECT
       COUNT(*) AS total,
@@ -334,6 +379,8 @@ function stats() {
     FROM appeals WHERE deleted_at IS NULL`).get(dayAgo);
   const authors = db.prepare('SELECT COUNT(DISTINCT tg_id) AS n FROM appeals WHERE deleted_at IS NULL').get().n;
   const blocked = db.prepare('SELECT COUNT(*) AS n FROM tg_users WHERE is_blocked = 1').get().n;
+  const overdue = db.prepare(`SELECT COUNT(*) AS n FROM appeals
+    WHERE deleted_at IS NULL AND status IN ('new','in_progress') AND created_at < ?`).get(now() - slaMs).n;
   return {
     total: base.total || 0,
     new: base.new_count || 0,
@@ -341,6 +388,7 @@ function stats() {
     answered: base.answered || 0,
     closed: base.closed || 0,
     last24h: base.last_24h || 0,
+    overdue,
     authors,
     blocked,
   };
@@ -374,6 +422,33 @@ const getAttachment = (id) => stmtGetAttachment.get(id);
 
 const stmtCountAttachments = db.prepare('SELECT COUNT(*) AS n FROM attachments WHERE appeal_id = ?');
 const countAttachments = (appealId) => stmtCountAttachments.get(appealId).n;
+
+/* =====================================================================
+   ICHKI IZOHLAR (foydalanuvchiga YUBORILMAYDI — faqat dekanat ko'radi)
+   ===================================================================== */
+const stmtAddNote = db.prepare('INSERT INTO notes (appeal_id, author, body, created_at) VALUES (?, ?, ?, ?)');
+function addNote(appealId, { author, body }) {
+  const info = stmtAddNote.run(appealId, author, body, now());
+  return Number(info.lastInsertRowid);
+}
+
+const stmtListNotes = db.prepare('SELECT * FROM notes WHERE appeal_id = ? ORDER BY created_at');
+const listNotes = (appealId) => stmtListNotes.all(appealId);
+
+/* =====================================================================
+   NAZORAT: javobsiz qolgan (kechikkan) murojaatlar
+   ===================================================================== */
+const stmtOverdue = db.prepare(`
+  SELECT * FROM appeals
+  WHERE deleted_at IS NULL AND status IN ('new','in_progress') AND created_at < ?
+  ORDER BY created_at LIMIT ?`);
+const listOverdueAppeals = (slaMs, limit = 20) => stmtOverdue.all(now() - slaMs, limit);
+
+const stmtCountUserAppeals = db.prepare('SELECT COUNT(*) AS n FROM appeals WHERE tg_id = ? AND deleted_at IS NULL');
+const countUserAppeals = (tgId) => stmtCountUserAppeals.get(tgId).n;
+
+const stmtMarkProgressNotified = db.prepare('UPDATE appeals SET progress_notified_at = ? WHERE id = ?');
+const markProgressNotified = (id) => stmtMarkProgressNotified.run(now(), id);
 
 /* =====================================================================
    JAVOBLAR
@@ -518,6 +593,7 @@ module.exports = {
   setAppealPhone, listAppeals, stats,
   addAttachment, listAttachments, getAttachment, countAttachments,
   addReply, markReplyDelivered, listReplies,
+  addNote, listNotes, listOverdueAppeals, countUserAppeals, markProgressNotified,
   addNotification, findNotification,
   getAdminByUsername, getAdmin, listAdmins, createAdmin, setAdminPassword, setAdminDisabled,
   setAdminTotp, touchAdminLogin, deleteAdmin, countAdmins, ensureOwner,

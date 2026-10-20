@@ -58,8 +58,14 @@ Guruh uchun: botni guruhga qo'shing, guruhga biror xabar yozing va server logida
 | «📞 Raqamni ulashish» | telefon raqami profilga qo'shiladi (ixtiyoriy) |
 
 **Spamga qarshi:** soatiga 4 ta, kuniga 12 ta murojaat; xabarlar orasida 20 soniya;
-10 soniyada 8 tadan ko'p xabar yuborgan foydalanuvchi vaqtincha e'tiborsiz qoldiriladi.
-Suiiste'mol qilgan foydalanuvchini paneldan bloklash mumkin. Chegaralar `.env` orqali o'zgaradi.
+juda tez yuborilsa foydalanuvchi ogohlantiriladi. Suiiste'mol qilgan foydalanuvchini
+paneldan bloklash mumkin. Chegaralar `.env` orqali o'zgaradi.
+
+**Albom (bir nechta rasm birga)** — Telegram ularni alohida-alohida yuboradi, shuning uchun
+bot albomni bir necha soniya kutib, hammasini **bitta murojaatga** biriktiradi.
+
+**Takrorlanishdan himoya** — Telegram xabarni qayta yuborsa (tarmoq uzilganda), bitta
+xabardan ikkita murojaat yaratilmaydi.
 
 ---
 
@@ -73,14 +79,36 @@ Suiiste'mol qilgan foydalanuvchini paneldan bloklash mumkin. Chegaralar `.env` o
   murojaat egasiga boradi, holat avtomatik «Javob berilgan»ga o'tadi.
 * **Holatlar** — Yangi → Ko'rilmoqda → Javob berilgan → Yopilgan.
 * **CSV** — hisobot yoki zaxira uchun (Excel'da ochiladi).
+* **Ichki izohlar** — xodimlar o'zaro yozishmasi (masalan «o'quv bo'limiga yuborildi»).
+  Murojaat egasi bu izohlarni **ko'rmaydi**.
+* **Kechikkanlar** — belgilangan muddatdan (standart 48 soat) oshgan javobsiz murojaatlar
+  alohida filtr va qizil belgi bilan ajralib turadi.
+* **Sana oralig'i** — oylik hisobot uchun: sanalarni tanlab CSV yuklab olasiz.
+* **Muallif tarixi** — shu odamning oldingi murojaatlari darhol ko'rinadi (takroriy masala).
+* **Rasm ko'rinishi** — ilova qilingan rasmlar panelda darhol ochiladi.
 * **Foydalanuvchilar** — bloklash/blokdan chiqarish.
 * **Adminlar** (faqat `owner`) — xodimlar uchun alohida login yaratish.
 * **Jurnal** (faqat `owner`) — kim, qachon, nima qilgani.
+* **Ikki qadamli kirish (2FA)** — profil menyusidan yoqiladi; Google Authenticator va
+  shunga o'xshash ilovalar bilan ishlaydi.
+* **Arxiv** — o'chirilgan murojaat yo'qolmaydi, `owner` uni «Tiklash» bilan qaytaradi.
 
-### Telegram'ning o'zidan javob berish
-`NOTIFY_CHAT_IDS` da ko'rsatilgan chatga har bir yangi murojaat xabarnoma bo'lib tushadi.
-Dekan shu xabarga oddiygina **«reply»** qilib javob yozsa, javob to'g'ridan-to'g'ri
-murojaat egasiga yetadi. Xabarnoma tagidagi tugmalar bilan holatni ham o'zgartirish mumkin.
+### Telegram'ning o'zidan boshqarish
+`NOTIFY_CHAT_IDS` da ko'rsatilgan chatga (dekanning **shaxsiy** chati ham, dekanat
+**guruhi** ham bo'lishi mumkin) har bir yangi murojaat xabarnoma bo'lib tushadi. U yerda:
+
+| Nima qilasiz | Qanday |
+|---|---|
+| Javob berish | xabarnomaga **«reply»** qilib yozasiz |
+| Javob berish (reply'siz) | `/javob MR-2026-0007 javob matni` |
+| Holatni o'zgartirish | xabarnoma tagidagi tugmalar |
+| Qisqa hisobot | `/statistika` |
+
+### Kunlik xulosa
+Har kuni belgilangan soatda (`DIGEST_HOUR`, standart 09:00) dekanat chatiga qisqa
+xulosa keladi: nechta yangi murojaat bor va **qaysi murojaatlar javobsiz qolgan**.
+Shu bilan hech bir murojaat e'tibordan chetda qolmaydi. Paneldagi profil menyusidan
+xulosani istalgan vaqtda qo'lda ham yuborish mumkin.
 
 ### Huquqlar
 | Rol | Nima qila oladi |
@@ -159,6 +187,11 @@ Barcha kalitlar va izohlar — `.env.example` faylida. Eng muhimlari:
 | `DATA_DIR` | baza va zaxiralar papkasi |
 | `APPEALS_PER_HOUR` / `APPEALS_PER_DAY` | spam chegaralari |
 | `REQUIRE_HTTPS` | HTTPS majburiyligi (production: `true`) |
+| `HOST` | qaysi manzilda tinglaydi (nginx ortida: `127.0.0.1`) |
+| `TRUST_PROXY` | kimga ishonish: `loopback`, proksi IP'si yoki bo'sh. **Raqam yozmang** |
+| `SLA_HOURS` | javobsiz murojaat «kechikkan» deb belgilanadigan muddat |
+| `DIGEST_HOUR` / `TZ_OFFSET_HOURS` | kunlik xulosa soati va mahalliy vaqt farqi |
+| `NOTIFY_USER_ON_PROGRESS` | «Ko'rib chiqilmoqda»da muallifga xabar berilsinmi |
 
 `NODE_ENV=production` bo'lsa, zaif yoki standart kalitlar bilan server **ishga tushmaydi**.
 
@@ -192,6 +225,17 @@ Tizimda amalga oshirilgan himoya choralari:
 - Baza fayllari `600` huquqi bilan; loglarda token/kalitlar avtomatik yashiriladi;
   IP va User-Agent ochiq emas, kalitlangan hash ko'rinishida saqlanadi.
 - Murojaat matni boshqaruv belgilaridan tozalanadi va uzunligi cheklanadi.
+
+**Qo'shimcha himoyalar (audit natijasida kuchaytirilgan)**
+- Panel standart holatda faqat `127.0.0.1` da tinglaydi — tashqi tarmoqqa nginx orqali chiqadi.
+- `X-Forwarded-Proto` / `X-Forwarded-For` sarlavhalariga **faqat ishonchli proksidan**
+  kelganda ishoniladi (`TRUST_PROXY`), shuning uchun HTTPS majburiyligini va so'rov
+  chegaralarini soxta sarlavha bilan aylanib o'tib bo'lmaydi.
+- Kirishni qulflash login registriga bog'liq emas (`admin`/`ADMIN` — bitta hisoblagich).
+- Javob matni Telegram chegarasidan oshsa, avtomatik bo'laklanadi — javob yo'qolmaydi.
+- Emoji/maxsus belgilar matn kesilganda buzilmaydi (UTF-16 xavfsiz kesish).
+- O'chirilgan murojaatni faqat `owner` ko'radi; holati o'zgartirilmaydi, tiklash mumkin.
+- Faqat **o'z** telefon raqamini ulashish mumkin (begona kontakt qabul qilinmaydi).
 
 **Sizning zimmangizdagi ishlar**
 1. `.env` faylini `chmod 600` qiling va hech kimga bermang (ayniqsa `BOT_TOKEN`).
@@ -232,7 +276,7 @@ sudo systemctl start murojaat-bot
 | `npm run hash -- "parol"` | parol hashini olish |
 | `npm run webhook set\|info\|delete` | webhook boshqaruvi |
 | `npm run backup` | bazaning zaxira nusxasi |
-| `npm test` | uchdan-uchiga tekshiruv (66 ta test, Telegram'siz) |
+| `npm test` | uchdan-uchiga tekshiruv (135 ta test, Telegram'siz) |
 
 ---
 

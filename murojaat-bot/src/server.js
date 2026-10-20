@@ -13,10 +13,10 @@ const { Readable } = require('stream');
 const { config } = require('./config');
 const db = require('./db');
 const log = require('./logger');
-const { bot, deliverReply, getFilePath } = require('./bot');
+const { bot, deliverReply, getFilePath, notifyAuthorInProgress, sendDailyDigest } = require('./bot');
 const {
   verifyPassword, hashPassword, verifyTotp, safeEqual, randomToken, sha256, keyedHash,
-  RateLimiter, serializeCookie, parseCookies, sanitizeText,
+  generateTotpSecret, RateLimiter, serializeCookie, parseCookies, sanitizeText,
 } = require('./security');
 
 const COOKIE_NAME = config.requireHttps ? '__Host-mb_session' : 'mb_session';
@@ -152,7 +152,9 @@ function createApp() {
     res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
     res.setHeader('X-Robots-Tag', 'noindex, nofollow');
 
-    const proto = req.headers['x-forwarded-proto'] || req.protocol;
+    /* req.protocol X-Forwarded-Proto'ni FAQAT ishonchli proksidan (trust proxy)
+       kelganda hisobga oladi — shuning uchun sarlavhani o'zimiz o'qimaymiz. */
+    const proto = req.protocol;
     if (config.requireHttps) {
       res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
       if (proto !== 'https' && req.method === 'GET') {
@@ -202,7 +204,9 @@ function createApp() {
      ===================================================================== */
   app.post('/api/login', (req, res) => {
     const ip = ipHash(req);
-    const username = sanitizeText(req.body?.username, 64);
+    /* Login registrga sezgir emas (COLLATE NOCASE) — qulflash hisoblagichlari
+       ham bir xil kalitni ko'rishi uchun kichik harfga keltiramiz (sec-02). */
+    const username = sanitizeText(req.body?.username, 64).toLowerCase();
     const password = typeof req.body?.password === 'string' ? req.body.password : '';
     const totp = sanitizeText(req.body?.totp, 8);
 
@@ -260,7 +264,9 @@ function createApp() {
       limits: {
         appealMinLength: config.appealMinLength,
         appealMaxLength: config.appealMaxLength,
+        slaHours: config.slaHours,
       },
+      totpEnabled: !!db.getAdmin(req.session.admin_id)?.totp_secret,
     });
   });
 
@@ -285,20 +291,22 @@ function createApp() {
   /* =====================================================================
      MUROJAATLAR
      ===================================================================== */
-  app.get('/api/stats', requireAuth, (req, res) => res.json(db.stats()));
+  app.get('/api/stats', requireAuth, (req, res) => res.json(db.stats(config.slaHours * 3600_000)));
 
   app.get('/api/appeals', requireAuth, (req, res) => {
     const limit = clamp(toInt(req.query.limit, 25), 1, 100);
     const offset = clamp(toInt(req.query.offset, 0), 0, 1_000_000);
-    const status = db.STATUSES.includes(String(req.query.status)) ? String(req.query.status) : '';
-    const search = sanitizeText(req.query.search, 120);
-    const { total, rows } = db.listAppeals({ status, search, limit, offset });
+    const { total, rows } = db.listAppeals({ ...appealFilters(req), limit, offset });
     res.json({ total, limit, offset, rows: rows.map(publicAppeal) });
   });
 
   app.get('/api/appeals/:id', requireAuth, (req, res) => {
     const appeal = db.getAppeal(toInt(req.params.id, -1));
     if (!appeal) return fail(res, 404, 'not_found', 'Murojaat topilmadi.');
+    /* O'chirilgan (arxivlangan) murojaatni faqat owner ko'radi */
+    if (appeal.deleted_at && req.session.role !== 'owner') {
+      return fail(res, 404, 'not_found', 'Murojaat topilmadi.');
+    }
     const author = db.getUser(appeal.tg_id);
     res.json({
       appeal: publicAppeal(appeal),
@@ -307,7 +315,13 @@ function createApp() {
         name: [author.first_name, author.last_name].filter(Boolean).join(' '),
         isBlocked: !!author.is_blocked, blockReason: author.block_reason,
         firstSeen: author.first_seen, lastSeen: author.last_seen,
+        appeals: db.countUserAppeals(appeal.tg_id),
       } : null,
+      /* Shu odamning oldingi murojaatlari — takroriy masalani darhol ko'rish uchun */
+      authorHistory: db.listUserAppeals(appeal.tg_id, 6)
+        .filter((row) => row.id !== appeal.id)
+        .map((row) => ({ id: row.id, code: row.code, status: row.status, createdAt: row.created_at, body: row.body.slice(0, 90) })),
+      notes: db.listNotes(appeal.id).map((n) => ({ id: n.id, author: n.author, body: n.body, createdAt: n.created_at })),
       attachments: db.listAttachments(appeal.id).map((a) => ({
         id: a.id, kind: a.kind, fileName: a.file_name, mimeType: a.mime_type, fileSize: a.file_size, createdAt: a.created_at,
       })),
@@ -321,10 +335,15 @@ function createApp() {
   app.post('/api/appeals/:id/status', requireAuth, requireCsrf, (req, res) => {
     const appeal = db.getAppeal(toInt(req.params.id, -1));
     if (!appeal) return fail(res, 404, 'not_found', 'Murojaat topilmadi.');
+    if (appeal.deleted_at) return fail(res, 400, 'deleted', 'O\'chirilgan murojaat holati o\'zgartirilmaydi. Avval tiklang.');
     const status = String(req.body?.status || '');
     if (!db.STATUSES.includes(status)) return fail(res, 400, 'bad_status', 'Holat qiymati noto\'g\'ri.');
     const updated = db.setAppealStatus(appeal.id, status);
     db.audit(req.actor, 'status', appeal.code, status, ipHash(req));
+    /* "Ko'rib chiqilmoqda"ga o'tganda muallifni bir marta xabardor qilamiz (fon rejimida) */
+    if (status === 'in_progress' && !appeal.progress_notified_at && !appeal.deleted_at) {
+      notifyAuthorInProgress(updated).catch(() => { /* bot xatosi javobni to'xtatmasin */ });
+    }
     res.json({ ok: true, appeal: publicAppeal(updated) });
   });
 
@@ -346,6 +365,20 @@ function createApp() {
       });
     }
     res.json({ ok: true, appeal: publicAppeal(db.getAppeal(appeal.id)) });
+  });
+
+  /* Ichki izoh — foydalanuvchiga YUBORILMAYDI, faqat dekanat ko'radi */
+  app.post('/api/appeals/:id/notes', requireAuth, requireCsrf, (req, res) => {
+    const appeal = db.getAppeal(toInt(req.params.id, -1));
+    if (!appeal || (appeal.deleted_at && req.session.role !== 'owner')) {
+      return fail(res, 404, 'not_found', 'Murojaat topilmadi.');
+    }
+    const body = sanitizeText(req.body?.body, 2000);
+    if (body.length < 2) return fail(res, 400, 'empty', 'Izoh matni bo\'sh.');
+    const id = db.addNote(appeal.id, { author: req.actor, body });
+    db.touchAppeal(appeal.id);
+    db.audit(req.actor, 'note', appeal.code, body.slice(0, 120), ipHash(req));
+    res.json({ ok: true, note: { id, author: req.actor, body, createdAt: Date.now() } });
   });
 
   app.post('/api/appeals/:id/delete', requireAuth, requireCsrf, requireOwner, (req, res) => {
@@ -392,9 +425,7 @@ function createApp() {
 
   /* --- CSV eksport (zaxira/hisobot) --- */
   app.get('/api/export.csv', requireAuth, (req, res) => {
-    const status = db.STATUSES.includes(String(req.query.status)) ? String(req.query.status) : '';
-    const search = sanitizeText(req.query.search, 120);
-    const { rows } = db.listAppeals({ status, search, limit: 10_000, offset: 0 });
+    const { rows } = db.listAppeals({ ...appealFilters(req), limit: 10_000, offset: 0 });
 
     /* CSV formula injection himoyasi: =, +, -, @ bilan boshlangan qiymatlar oldiga ' qo'yiladi */
     const cell = (value) => {
@@ -452,6 +483,49 @@ function createApp() {
   /* =====================================================================
      ADMINLAR (faqat egasi) VA AUDIT
      ===================================================================== */
+  /* ---- Ikki qadamli kirish (TOTP): o'z hisobing uchun ---- */
+  app.post('/api/totp/init', requireAuth, requireCsrf, (req, res) => {
+    const admin = db.getAdmin(req.session.admin_id);
+    if (!verifyPassword(String(req.body?.password || ''), admin.password_hash)) {
+      return fail(res, 401, 'bad_credentials', 'Parol xato.');
+    }
+    const secret = generateTotpSecret();
+    const label = encodeURIComponent(`${config.facultyName} (${admin.username})`);
+    res.json({
+      secret,
+      /* Ilovaga qo'lda kiritish uchun 4 talikka bo'lingan ko'rinish */
+      formatted: secret.replace(/(.{4})/g, '$1 ').trim(),
+      otpauth: `otpauth://totp/${label}?secret=${secret}&issuer=Murojaat%20paneli&algorithm=SHA1&digits=6&period=30`,
+    });
+  });
+
+  app.post('/api/totp/enable', requireAuth, requireCsrf, (req, res) => {
+    const secret = String(req.body?.secret || '').toUpperCase().replace(/[^A-Z2-7]/g, '');
+    const code = sanitizeText(req.body?.code, 8);
+    if (secret.length < 16) return fail(res, 400, 'bad_secret', 'Kalit noto\'g\'ri — qaytadan boshlang.');
+    if (!verifyTotp(secret, code)) return fail(res, 400, 'bad_totp', 'Kod xato yoki muddati o\'tgan. Qaytadan urinib ko\'ring.');
+    db.setAdminTotp(req.session.admin_id, secret);
+    db.audit(req.actor, 'totp_enabled', null, null, ipHash(req));
+    res.json({ ok: true, message: 'Ikki qadamli kirish yoqildi.' });
+  });
+
+  app.post('/api/totp/disable', requireAuth, requireCsrf, (req, res) => {
+    const admin = db.getAdmin(req.session.admin_id);
+    if (!verifyPassword(String(req.body?.password || ''), admin.password_hash)) {
+      return fail(res, 401, 'bad_credentials', 'Parol xato.');
+    }
+    db.setAdminTotp(req.session.admin_id, null);
+    db.audit(req.actor, 'totp_disabled', null, null, ipHash(req));
+    res.json({ ok: true, message: 'Ikki qadamli kirish o\'chirildi.' });
+  });
+
+  /* Kunlik xulosani darhol yuborish (sinab ko'rish uchun) */
+  app.post('/api/digest', requireAuth, requireCsrf, requireOwner, async (req, res) => {
+    const result = await sendDailyDigest({ force: true });
+    db.audit(req.actor, 'digest_sent', null, JSON.stringify(result), ipHash(req));
+    res.json({ ok: true, ...result });
+  });
+
   app.get('/api/admins', requireAuth, requireOwner, (req, res) => {
     res.json({ rows: db.listAdmins().map((a) => ({
       id: a.id, username: a.username, role: a.role, isDisabled: !!a.is_disabled,
@@ -511,12 +585,40 @@ function createApp() {
 
   /* Kutilmagan xatolar — tafsilotlar faqat logda qoladi */
   app.use((err, req, res, _next) => {
-    log.error('server xatosi', { path: req.path, error: String(err?.stack || err) });
     if (res.headersSent) return;
+    /* Kirish ma'lumoti xatosi — bu server nosozligi emas */
+    if (err?.type === 'entity.too.large' || err?.status === 413) {
+      return fail(res, 413, 'payload_too_large', 'Yuborilgan ma\'lumot juda katta.');
+    }
+    if (err?.type === 'entity.parse.failed' || err?.status === 400) {
+      return fail(res, 400, 'bad_json', 'So\'rov formati noto\'g\'ri.');
+    }
+    log.error('server xatosi', { path: req.path, error: String(err?.stack || err) });
     fail(res, 500, 'server_error', 'Server xatosi. Administratorga xabar bering.');
   });
 
   return app;
+}
+
+/** So'rovdagi filtrlar: holat, qidiruv, sana oralig'i, kechikkanlar */
+function appealFilters(req) {
+  const status = db.STATUSES.includes(String(req.query.status)) ? String(req.query.status) : '';
+  const search = sanitizeText(req.query.search, 120);
+  const parseDate = (value, endOfDay) => {
+    const text = String(value || '').trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return null;
+    const ms = Date.parse(text + (endOfDay ? 'T23:59:59.999Z' : 'T00:00:00.000Z'));
+    if (!Number.isFinite(ms)) return null;
+    /* Sana mahalliy vaqtda tanlanadi — UTC'ga keltiramiz */
+    return ms - config.tzOffsetHours * 3600_000;
+  };
+  return {
+    status,
+    search,
+    from: parseDate(req.query.from, false),
+    to: parseDate(req.query.to, true),
+    overdue: String(req.query.overdue || '') === '1' ? Date.now() - config.slaHours * 3600_000 : null,
+  };
 }
 
 /* Panelga chiqadigan maydonlar (ichki ustunlar yashirin) */
@@ -537,6 +639,8 @@ function publicAppeal(row) {
     deletedAt: row.deleted_at,
     attachmentsCount: row.attachments_count ?? undefined,
     repliesCount: row.replies_count ?? undefined,
+    notesCount: row.notes_count ?? undefined,
+    progressNotifiedAt: row.progress_notified_at ?? null,
   };
 }
 

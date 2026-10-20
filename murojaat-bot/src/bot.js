@@ -8,7 +8,7 @@ const { Bot, GrammyError, HttpError, Keyboard, InlineKeyboard } = require('gramm
 const { config } = require('./config');
 const db = require('./db');
 const log = require('./logger');
-const { escapeHtml, sanitizeText, RateLimiter } = require('./security');
+const { escapeHtml, sanitizeText, cut, RateLimiter } = require('./security');
 
 const bot = new Bot(config.botToken, {
   client: { apiRoot: config.botApiRoot },
@@ -103,18 +103,36 @@ Holatni bilish uchun: <code>/holat ${appeal.code}</code>`;
 /* =====================================================================
    MIDDLEWARE: flood himoyasi, foydalanuvchini yozib qo'yish, blok
    ===================================================================== */
+/* Flood ogohlantirishi har bir foydalanuvchiga oynada bir marta */
+const floodNotified = new Map();   // tg_id -> vaqt
+
 bot.use(async (ctx, next) => {
   const from = ctx.from;
   if (!from || from.is_bot) return;
 
   /* Guruh/kanal: murojaat faqat shaxsiy chatdan qabul qilinadi.
-     Dekan xabarnoma keladigan guruh esa "xizmat chati" sifatida ishlaydi. */
+     Xabarnoma keladigan chat (guruh YOKI dekanning shaxsiy chati) — "xizmat chati". */
   const isPrivate = ctx.chat?.type === 'private';
-  const isNotifyChat = ctx.chat && config.notifyChatIds.includes(ctx.chat.id);
-  if (!isPrivate && !isNotifyChat) return;
+  const isOfficeChat = !!ctx.chat && config.notifyChatIds.includes(ctx.chat.id);
+  if (!isPrivate && !isOfficeChat) {
+    /* Begona guruhdagi tugma bosilsa — Telegram'da "yuklanmoqda" bo'lib qolmasin */
+    if (ctx.callbackQuery) await ctx.answerCallbackQuery({ text: 'Ruxsat yo\'q', show_alert: true }).catch(() => {});
+    return;
+  }
+  ctx.state = { isOfficeChat };
 
-  if (!floodLimiter.check('tg:' + from.id).allowed) {
-    log.warn('flood: foydalanuvchi vaqtincha e\'tiborsiz qoldirildi', { tg_id: from.id });
+  /* Albom (media-guruh) elementlari ketma-ket keladi — ularni flood deb hisoblamaymiz,
+     aks holda rasmlarning bir qismi jimgina yo'qoladi (bot-05). */
+  const isAlbumPart = !!ctx.message?.media_group_id;
+  if (!isAlbumPart && !floodLimiter.check('tg:' + from.id).allowed) {
+    log.warn('flood: xabar e\'tiborsiz qoldirildi', { tg_id: from.id });
+    const lastNotice = floodNotified.get(from.id) || 0;
+    if (isPrivate && Date.now() - lastNotice > 60_000) {
+      floodNotified.set(from.id, Date.now());
+      if (floodNotified.size > 5000) floodNotified.clear();
+      await ctx.reply('⏱ Juda tez yuborilmoqda. Bir ozdan keyin qayta urinib ko\'ring — ' +
+        'yuborilgan xabarlarning bir qismi qabul qilinmadi.').catch(() => {});
+    }
     return;
   }
 
@@ -125,7 +143,7 @@ bot.use(async (ctx, next) => {
         'Savol bo\'lsa dekanatga bevosita murojaat qiling.').catch(() => {});
       return;
     }
-    ctx.state = { user };
+    ctx.state.user = user;
   }
   await next();
 });
@@ -177,10 +195,10 @@ function appealCardText(appeal) {
   const head = `🔖 <code>${appeal.code}</code>\n` +
     `Holati: <b>${STATUS_LABEL[appeal.status] || appeal.status}</b>\n` +
     `Yuborilgan: ${new Date(appeal.created_at).toLocaleString('uz-UZ', { timeZone: 'Asia/Tashkent' })}\n\n` +
-    `<b>Matn:</b>\n${escapeHtml(appeal.body.slice(0, 900))}${appeal.body.length > 900 ? '…' : ''}`;
+    `<b>Matn:</b>\n${escapeHtml(cut(appeal.body, 900))}`;
   if (!replies.length) return head + '\n\n⏳ Javob hali kelmagan.';
   const last = replies[replies.length - 1];
-  return head + `\n\n<b>Dekanat javobi</b> (${new Date(last.created_at).toLocaleDateString('uz-UZ')}):\n${escapeHtml(last.body.slice(0, 900))}`;
+  return head + `\n\n<b>Dekanat javobi</b> (${new Date(last.created_at).toLocaleDateString('uz-UZ')}):\n${escapeHtml(cut(last.body, 900))}`;
 }
 
 async function sendMyAppeals(ctx) {
@@ -192,7 +210,7 @@ async function sendMyAppeals(ctx) {
   }
   const lines = rows.map((a) => {
     const date = new Date(a.created_at).toLocaleDateString('uz-UZ', { timeZone: 'Asia/Tashkent' });
-    return `<code>${a.code}</code> · ${date}\n${STATUS_LABEL[a.status] || a.status} — ${escapeHtml(a.body.slice(0, 70))}${a.body.length > 70 ? '…' : ''}`;
+    return `<code>${a.code}</code> · ${date}\n${STATUS_LABEL[a.status] || a.status} — ${escapeHtml(cut(a.body, 70))}`;
   });
   await ctx.reply(`<b>Oxirgi murojaatlaringiz (${rows.length})</b>\n\n` + lines.join('\n\n') +
     `\n\nBatafsil: <code>/holat ${rows[0].code}</code>`, { parse_mode: 'HTML' });
@@ -204,9 +222,12 @@ async function sendMyAppeals(ctx) {
 bot.on('message:contact', async (ctx) => {
   if (ctx.chat.type !== 'private') return;
   const contact = ctx.message.contact;
-  /* Faqat o'z raqamini ulashishi mumkin — boshqaning kontaktini qabul qilmaymiz */
-  if (contact.user_id && contact.user_id !== ctx.from.id) {
-    await ctx.reply('Iltimos, faqat <b>o\'z</b> raqamingizni ulashing.', { parse_mode: 'HTML' });
+  /* Faqat o'z raqami. Telegram "Raqamni ulashish" tugmasi doim user_id beradi;
+     telefon kitobidan yuborilgan begona kontaktda u yo'q — demak qabul qilmaymiz. */
+  if (contact.user_id !== ctx.from.id) {
+    await ctx.reply('Iltimos, pastdagi <b>«📞 Raqamni ulashish»</b> tugmasi orqali faqat ' +
+      '<b>o\'z</b> raqamingizni yuboring. Boshqa odamning kontakti qabul qilinmaydi.',
+      { parse_mode: 'HTML', reply_markup: mainKeyboard() });
     return;
   }
   const phone = sanitizeText(contact.phone_number, 24);
@@ -247,10 +268,10 @@ function extractAttachment(message) {
   return null;
 }
 
-function rememberPending(tgId, attachment) {
+function rememberPending(tgId, attachments) {
+  const cap = Math.max(1, config.maxAttachmentsPerAppeal);
   const entry = pendingMedia.get(tgId) || { items: [], expires: 0 };
-  entry.items = entry.items.filter(Boolean).slice(-config.maxAttachmentsPerAppeal + 1);
-  entry.items.push(attachment);
+  entry.items = entry.items.filter(Boolean).concat([].concat(attachments)).slice(-cap);
   entry.expires = Date.now() + PENDING_TTL_MS;
   pendingMedia.set(tgId, entry);
   if (pendingMedia.size > 5000) {           // xotira himoyasi
@@ -265,8 +286,84 @@ function takePending(tgId) {
   return entry.items;
 }
 
+/* ---------------------------------------------------------------------
+   ALBOM (media-guruh) BUFERI
+   Telegram albomning har bir rasmini ALOHIDA update qilib yuboradi va
+   ularning tartibini kafolatlamaydi (izoh birinchi kelmasligi mumkin).
+   Shuning uchun guruhni bir necha soniya kutib, BUTUN albomni bitta
+   murojaat sifatida qayta ishlaymiz.
+   --------------------------------------------------------------------- */
+const ALBUM_WAIT_MS = 2500;
+const albums = new Map();   // `${tgId}:${media_group_id}` -> { items, caption, chatId, messageId, timer }
+
+function bufferAlbumItem(ctx, attachment) {
+  const key = `${ctx.from.id}:${ctx.message.media_group_id}`;
+  const cap = Math.max(1, config.maxAttachmentsPerAppeal);
+  let album = albums.get(key);
+  if (!album) {
+    album = { items: [], caption: '', dropped: 0, chatId: ctx.chat.id, tgId: ctx.from.id, messageId: ctx.message.message_id, timer: null };
+    albums.set(key, album);
+    if (albums.size > 1000) {               // xotira himoyasi
+      for (const [k, value] of albums) if (!value.timer) albums.delete(k);
+    }
+  }
+  if (album.items.length < cap) album.items.push(attachment); else album.dropped++;
+
+  const caption = sanitizeText(ctx.message.caption, config.appealMaxLength);
+  if (caption && !album.caption) {
+    album.caption = caption;
+    album.messageId = ctx.message.message_id;   // murojaat shu xabarga bog'lanadi
+  }
+
+  clearTimeout(album.timer);
+  album.timer = setTimeout(() => {
+    finishAlbum(ctx, key).catch((err) => log.warn('albomni qayta ishlashda xato', { error: String(err.message) }));
+  }, ALBUM_WAIT_MS);
+  album.timer.unref?.();
+}
+
+async function finishAlbum(ctx, key) {
+  const album = albums.get(key);
+  if (!album) return;
+  albums.delete(key);
+  clearTimeout(album.timer);
+
+  const extra = album.dropped
+    ? `\n\n⚠️ Faqat dastlabki ${config.maxAttachmentsPerAppeal} ta fayl qabul qilindi.`
+    : '';
+
+  /* 1) Izoh bor — butun albom bitta yangi murojaat */
+  if (album.caption.length >= config.appealMinLength) {
+    await createAppealFromMessage(ctx, album.caption, { extraAttachments: album.items, messageId: album.messageId, extraNote: extra });
+    return;
+  }
+
+  /* 2) Izohsiz albom — yaqinda yuborilgan murojaatga qo'shamiz */
+  const recent = db.getRecentAppealOfUser(album.tgId, Date.now() - 30 * 60_000);
+  if (recent) {
+    const free = Math.max(0, config.maxAttachmentsPerAppeal - db.countAttachments(recent.id));
+    const added = album.items.slice(0, free);
+    for (const item of added) db.addAttachment(recent.id, item);
+    if (added.length) db.touchAppeal(recent.id);
+    await bot.api.sendMessage(album.chatId, added.length
+      ? `📎 ${added.length} ta fayl <code>${recent.code}</code> murojaatingizga qo'shildi.${extra}`
+      : `📎 Bu murojaatga ${config.maxAttachmentsPerAppeal} tadan ko'p fayl qo'shib bo'lmaydi.`,
+      { parse_mode: 'HTML' }).catch(() => {});
+    return;
+  }
+
+  /* 3) Murojaat yo'q — fayllarni saqlab turamiz va matn so'raymiz (bitta xabar) */
+  rememberPending(album.tgId, album.items);
+  await bot.api.sendMessage(album.chatId,
+    `📎 ${album.items.length} ta fayl qabul qilindi. Endi murojaatingizni <b>matn bilan</b> yozib yuboring — ` +
+    `fayllar shu murojaatga qo'shiladi.${extra}`, { parse_mode: 'HTML' }).catch(() => {});
+}
+
 bot.on(['message:photo', 'message:document', 'message:voice', 'message:audio', 'message:video', 'message:video_note'], async (ctx) => {
-  if (ctx.chat.type !== 'private') return handleOfficeReply(ctx);
+  if (ctx.state?.isOfficeChat && (ctx.message.reply_to_message || /^\/(javob|statistika)\b/i.test(ctx.message.caption || ''))) {
+    return handleOfficeReply(ctx);
+  }
+  if (ctx.chat.type !== 'private') return;
 
   const attachment = extractAttachment(ctx.message);
   if (!attachment) return;
@@ -276,12 +373,17 @@ bot.on(['message:photo', 'message:document', 'message:voice', 'message:audio', '
     return;
   }
 
+  /* Albom bo'lsa — buferga qo'yamiz, hammasi kelgach bir marta ishlanadi */
+  if (ctx.message.media_group_id) {
+    bufferAlbumItem(ctx, attachment);
+    return;
+  }
+
   const caption = sanitizeText(ctx.message.caption, config.appealMaxLength);
 
   /* 1) Izoh (caption) yetarli bo'lsa — bu yangi murojaat */
   if (caption.length >= config.appealMinLength) {
-    rememberPending(ctx.from.id, attachment);
-    await createAppealFromMessage(ctx, caption);
+    await createAppealFromMessage(ctx, caption, { extraAttachments: [attachment] });
     return;
   }
 
@@ -294,27 +396,27 @@ bot.on(['message:photo', 'message:document', 'message:voice', 'message:audio', '
     }
     db.addAttachment(recent.id, attachment);
     db.touchAppeal(recent.id);
-    /* Media-guruh (bir nechta rasm birga) bo'lsa — bitta javob yetarli */
-    if (!ctx.message.media_group_id) {
-      await ctx.reply(`📎 Fayl <code>${recent.code}</code> murojaatingizga qo'shildi.`, { parse_mode: 'HTML' });
-    }
+    await ctx.reply(`📎 Fayl <code>${recent.code}</code> murojaatingizga qo'shildi.`, { parse_mode: 'HTML' });
     return;
   }
 
   /* 3) Aks holda — faylni saqlab turamiz va matn so'raymiz */
   rememberPending(ctx.from.id, attachment);
-  if (!ctx.message.media_group_id) {
-    await ctx.reply('📎 Fayl qabul qilindi. Endi murojaatingizni <b>matn bilan</b> yozib yuboring — fayl shu murojaatga qo\'shiladi.', { parse_mode: 'HTML' });
-  }
+  await ctx.reply('📎 Fayl qabul qilindi. Endi murojaatingizni <b>matn bilan</b> yozib yuboring — fayl shu murojaatga qo\'shiladi.', { parse_mode: 'HTML' });
 });
 
 /* =====================================================================
    ASOSIY OQIM: har qanday matn — murojaat (kategoriya yo'q)
    ===================================================================== */
 bot.on('message:text', async (ctx) => {
-  if (ctx.chat.type !== 'private') return handleOfficeReply(ctx);
-
   const raw = ctx.message.text || '';
+
+  /* Xizmat chati (guruh YOKI dekanning shaxsiy chati): xabarnomaga "reply"
+     va /javob, /statistika buyruqlari murojaat emas — dekanat amallari (bot-01). */
+  if (ctx.state?.isOfficeChat && (ctx.message.reply_to_message || /^\/(javob|statistika)\b/i.test(raw.trim()))) {
+    return handleOfficeReply(ctx);
+  }
+  if (ctx.chat.type !== 'private') return;
   if (raw.startsWith('/')) {
     /* Buyruqlar bot.command() orqali ishlanadi; bu yerga faqat entity'siz
        yoki noma'lum buyruqlar tushadi. */
@@ -367,11 +469,18 @@ function checkAppealLimits(tgId) {
   return { ok: true };
 }
 
-async function createAppealFromMessage(ctx, body) {
+async function createAppealFromMessage(ctx, body, { extraAttachments = [], messageId = null, extraNote = '' } = {}) {
+  const chatId = ctx.chat.id;
+  const say = (text, options = {}) => bot.api.sendMessage(chatId, text, options).catch(() => {});
+
+  /* Chegarani AVVAL tekshiramiz: rad etilsa, fayllar xotirada qolib,
+     keyingi aloqasiz murojaatga yopishib ketmasligi kerak (bot-03). */
   const limit = checkAppealLimits(ctx.from.id);
   if (!limit.ok) {
-    await ctx.reply(limit.message);
-    return;
+    await say(limit.message + (extraAttachments.length
+      ? '\n\n📎 Yuborgan faylingiz saqlanmadi — keyingi murojaat bilan birga qayta yuboring.'
+      : ''));
+    return { ok: false };
   }
 
   const user = db.getUser(ctx.from.id);
@@ -383,23 +492,32 @@ async function createAppealFromMessage(ctx, body) {
       authorUsername: ctx.from.username || null,
       authorPhone: user?.phone || null,
       body,
-      chatId: ctx.chat.id,
-      messageId: ctx.message.message_id,
+      chatId,
+      messageId: messageId || ctx.message.message_id,
     });
   } catch (err) {
     log.error('murojaatni saqlashda xato', { error: String(err.message) });
-    await ctx.reply('⚠️ Texnik nosozlik sababli murojaat saqlanmadi. Iltimos, bir ozdan keyin qayta yuboring.');
-    return;
+    await say('⚠️ Texnik nosozlik sababli murojaat saqlanmadi. Iltimos, bir ozdan keyin qayta yuboring.');
+    return { ok: false };
   }
 
-  /* Kutib turgan fayllarni shu murojaatga bog'laymiz */
-  const pending = takePending(ctx.from.id).slice(0, config.maxAttachmentsPerAppeal);
-  for (const attachment of pending) {
+  /* Telegram update'ni qayta yuborgan bo'lsa — ikkinchi marta javob bermaymiz (bot-06) */
+  if (appeal.duplicate) {
+    log.info('takroriy update e\'tiborsiz qoldirildi', { code: appeal.code });
+    return { ok: true, duplicate: true, appeal };
+  }
+
+  /* Kutib turgan + shu xabardagi fayllarni bog'laymiz */
+  const cap = Math.max(1, config.maxAttachmentsPerAppeal);
+  const attachments = [...takePending(ctx.from.id), ...extraAttachments].slice(0, cap);
+  for (const attachment of attachments) {
     try { db.addAttachment(appeal.id, attachment); } catch (err) { log.warn('ilovani saqlash xatosi', { error: String(err.message) }); }
   }
 
-  await ctx.reply(confirmText(appeal, pending.length), { parse_mode: 'HTML', reply_markup: mainKeyboard() });
-  notifyOffice(appeal, pending.length).catch((err) => log.warn('xabarnoma yuborilmadi', { error: String(err.message) }));
+  const count = db.countAttachments(appeal.id);       // haqiqiy son (bot-09)
+  await say(confirmText(appeal, count) + extraNote, { parse_mode: 'HTML', reply_markup: mainKeyboard() });
+  notifyOffice(appeal, count).catch((err) => log.warn('xabarnoma yuborilmadi', { error: String(err.message) }));
+  return { ok: true, appeal };
 }
 
 /* =====================================================================
@@ -411,8 +529,9 @@ async function notifyOffice(appeal, attachmentsCount = 0) {
     `👤 ${authorLine(appeal)}\n` +
     `🕒 ${new Date(appeal.created_at).toLocaleString('uz-UZ', { timeZone: 'Asia/Tashkent' })}` +
     (attachmentsCount ? `\n📎 ${attachmentsCount} ta fayl` : '') +
-    `\n\n${escapeHtml(appeal.body.slice(0, 1200))}${appeal.body.length > 1200 ? '…' : ''}` +
-    `\n\n<i>Javob berish uchun shu xabarga «reply» qilib yozing.</i>`;
+    `\n\n${escapeHtml(cut(appeal.body, 1200))}` +
+    `\n\n<i>Javob berish uchun shu xabarga «reply» qilib yozing yoki:</i>\n` +
+    `<code>/javob ${appeal.code} javob matni</code>`;
 
   const keyboard = new InlineKeyboard()
     .text("⏳ Ko'rib chiqilmoqda", `st:${appeal.id}:in_progress`)
@@ -429,10 +548,50 @@ async function notifyOffice(appeal, attachmentsCount = 0) {
   }
 }
 
-/** Xizmat chatida xabarnomaga "reply" qilingan bo'lsa — bu murojaatga javob. */
+/**
+ * Xizmat chati (dekanat/dekan): xabarnomaga "reply" qilib javob yozish,
+ * yoki buyruqlar bilan ishlash. Faqat NOTIFY_CHAT_IDS dagi chatlar uchun.
+ */
 async function handleOfficeReply(ctx) {
   const chatId = ctx.chat?.id;
   if (!chatId || !config.notifyChatIds.includes(chatId)) return;
+
+  const text = ctx.message?.text || ctx.message?.caption || '';
+
+  /* /javob MR-2026-0007 javob matni — "reply" qilmasdan ham javob berish */
+  const direct = /^\/javob(?:@[A-Za-z0-9_]+)?\s+(MR-\d{4}-[A-Za-z0-9]+)\s+([\s\S]+)$/i.exec(text.trim());
+  if (direct) {
+    const appeal = db.getAppealByCode(direct[1]);
+    if (!appeal || appeal.deleted_at) {
+      await ctx.reply('Bunday raqamli murojaat topilmadi.');
+      return;
+    }
+    const body = sanitizeText(direct[2], 3500);
+    const result = await deliverReply(appeal, body, { author: '@' + (ctx.from.username || fullName(ctx.from)), via: 'telegram' });
+    await ctx.reply(result.ok
+      ? `✅ Javob <code>${appeal.code}</code> muallifiga yuborildi.`
+      : `⚠️ Yuborilmadi: ${escapeHtml(result.error || 'noma\'lum xato')}`, { parse_mode: 'HTML' });
+    return;
+  }
+  if (/^\/javob\b/i.test(text.trim())) {
+    await ctx.reply(`Foydalanish: <code>/javob MR-${new Date().getFullYear()}-0007 javob matni</code>\n` +
+      'Yoki murojaat xabarnomasiga «reply» qilib yozing.', { parse_mode: 'HTML' });
+    return;
+  }
+
+  /* /statistika — qisqa holat */
+  if (/^\/statistika(?:@[A-Za-z0-9_]+)?\b/i.test(text.trim())) {
+    const stats = db.stats(config.slaHours * 3600_000);
+    await ctx.reply(`📊 <b>Murojaatlar holati</b>\n\n` +
+      `🆕 Yangi: <b>${stats.new}</b>\n` +
+      `⏳ Ko'rilmoqda: <b>${stats.inProgress}</b>\n` +
+      `✅ Javob berilgan: <b>${stats.answered}</b>\n` +
+      `🔒 Yopilgan: <b>${stats.closed}</b>\n` +
+      `⚠️ Kechikkan (${config.slaHours} soatdan oshgan): <b>${stats.overdue}</b>\n\n` +
+      `Oxirgi 24 soatda: ${stats.last24h} ta\nJami: ${stats.total} ta`, { parse_mode: 'HTML' });
+    return;
+  }
+
   const replyTo = ctx.message?.reply_to_message;
   if (!replyTo) return;
 
@@ -470,7 +629,10 @@ bot.on('callback_query:data', async (ctx) => {
   if (!match) { await ctx.answerCallbackQuery(); return; }
 
   const appeal = db.getAppeal(Number(match[1]));
-  if (!appeal) { await ctx.answerCallbackQuery({ text: 'Murojaat topilmadi', show_alert: true }); return; }
+  if (!appeal || appeal.deleted_at) {
+    await ctx.answerCallbackQuery({ text: 'Murojaat topilmadi yoki o\'chirilgan', show_alert: true });
+    return;
+  }
 
   db.setAppealStatus(appeal.id, match[2]);
   db.audit('@' + (ctx.from.username || ctx.from.id), 'status', appeal.code, `telegram → ${match[2]}`);
@@ -480,15 +642,66 @@ bot.on('callback_query:data', async (ctx) => {
 /* =====================================================================
    JAVOBNI FOYDALANUVCHIGA YETKAZISH (panel ham, Telegram ham shu funksiyani ishlatadi)
    ===================================================================== */
+/**
+ * Matnni Telegram xabariga sig'adigan bo'laklarga ajratadi.
+ * HTML qochirish matnni uzaytiradi (" → &quot;), shuning uchun hajm
+ * QOCHIRILGAN uzunlik bo'yicha hisoblanadi (fe-04).
+ */
+function splitForTelegram(body, budget) {
+  const parts = [];
+  let current = '';
+  let currentLength = 0;
+  const flush = () => {
+    const trimmed = current.trim();
+    if (trimmed) parts.push(trimmed);
+    current = '';
+    currentLength = 0;
+  };
+
+  for (const token of String(body).split(/(\s+)/)) {
+    if (!token) continue;
+    const tokenLength = escapeHtml(token).length;
+
+    /* Juda uzun "so'z" (masalan havola yoki tirnoqlar ketma-ketligi) —
+       kod nuqtalari bo'yicha majburiy bo'lamiz (emoji buzilmaydi). */
+    if (tokenLength > budget) {
+      flush();
+      for (const ch of Array.from(token)) {
+        const chLength = escapeHtml(ch).length;
+        if (currentLength + chLength > budget) flush();
+        current += ch;
+        currentLength += chLength;
+      }
+      continue;
+    }
+
+    if (currentLength + tokenLength > budget) flush();
+    current += token;
+    currentLength += tokenLength;
+  }
+  flush();
+  return parts.length ? parts : [String(body)];
+}
+
 async function deliverReply(appeal, body, { author, via = 'panel' } = {}) {
   const replyId = db.addReply(appeal.id, { author, body, via });
-  const text = `📬 <b>Dekanat javobi</b>\n🔖 Murojaat: <code>${appeal.code}</code>\n\n${escapeHtml(body)}\n\n` +
-    `<i>${escapeHtml(config.facultyName)}</i>`;
+  const header = `📬 <b>Dekanat javobi</b>\n🔖 Murojaat: <code>${appeal.code}</code>\n\n`;
+  const footer = `\n\n<i>${escapeHtml(config.facultyName)}</i>`;
+  /* 4096 — Telegram chegarasi; sarlavha/imzo va zaxira uchun joy qoldiramiz */
+  const budget = 4096 - header.length - footer.length - 64;
+  const chunks = splitForTelegram(body, budget);
+
   try {
-    await bot.api.sendMessage(appeal.chat_id, text, {
-      parse_mode: 'HTML',
-      reply_parameters: appeal.message_id ? { message_id: appeal.message_id, allow_sending_without_reply: true } : undefined,
-    });
+    for (let i = 0; i < chunks.length; i++) {
+      const isFirst = i === 0;
+      const isLast = i === chunks.length - 1;
+      const text = (isFirst ? header : `📬 <b>Javob (davomi ${i + 1}/${chunks.length})</b>\n\n`) +
+        escapeHtml(chunks[i]) + (isLast ? footer : '');
+      await bot.api.sendMessage(appeal.chat_id, text, {
+        parse_mode: 'HTML',
+        reply_parameters: isFirst && appeal.message_id ? { message_id: appeal.message_id, allow_sending_without_reply: true } : undefined,
+      });
+    }
     db.markReplyDelivered(replyId, true);
     if (appeal.status !== 'closed') db.setAppealStatus(appeal.id, 'answered');
     return { ok: true, replyId };
@@ -498,6 +711,70 @@ async function deliverReply(appeal, body, { author, via = 'panel' } = {}) {
     log.warn('javob yetkazilmadi', { appeal: appeal.code, error: reason });
     return { ok: false, replyId, error: reason };
   }
+}
+
+/**
+ * Murojaat "ko'rib chiqilmoqda"ga o'tganda muallifga bir marta xabar beramiz —
+ * odam javobni kutayotganini bilsin. (NOTIFY_USER_ON_PROGRESS bilan o'chiriladi.)
+ */
+async function notifyAuthorInProgress(appeal) {
+  if (!config.notifyUserOnProgress) return { ok: false, skipped: true };
+  if (!appeal || appeal.progress_notified_at) return { ok: false, skipped: true };
+  db.markProgressNotified(appeal.id);
+  try {
+    await bot.api.sendMessage(appeal.chat_id,
+      `⏳ <b>Murojaatingiz ko'rib chiqilmoqda</b>\n🔖 <code>${appeal.code}</code>\n\n` +
+      'Dekanat murojaatingizni qabul qilib, ish boshladi. Javob tayyor bo\'lishi bilan shu yerga yuboriladi.',
+      { parse_mode: 'HTML' });
+    return { ok: true };
+  } catch (err) {
+    log.warn('holat xabarnomasi yetkazilmadi', { appeal: appeal.code, error: String(err.message) });
+    return { ok: false, error: String(err.message) };
+  }
+}
+
+/**
+ * Kunlik xulosa: javobsiz qolgan (kechikkan) murojaatlar ro'yxati dekanat chatiga.
+ * index.js uni muntazam chaqiradi; kuniga bir marta yuboriladi.
+ */
+async function sendDailyDigest({ force = false } = {}) {
+  if (!config.notifyChatIds.length) return { sent: false, reason: 'chat yo\'q' };
+
+  /* Mahalliy vaqt (TZ_OFFSET_HOURS) bo'yicha sana va soat */
+  const local = new Date(Date.now() + config.tzOffsetHours * 3600_000);
+  const today = local.toISOString().slice(0, 10);
+  const hour = local.getUTCHours();
+
+  if (!force) {
+    if (hour !== config.digestHour) return { sent: false, reason: 'vaqti emas' };
+    if (db.getSetting('last_digest_date') === today) return { sent: false, reason: 'bugun yuborilgan' };
+  }
+  db.setSetting('last_digest_date', today);
+
+  const stats = db.stats(config.slaHours * 3600_000);
+  const overdue = db.listOverdueAppeals(config.slaHours * 3600_000, 10);
+
+  const lines = overdue.map((appeal) => {
+    const days = Math.floor((Date.now() - appeal.created_at) / 3600_000 / 24);
+    const age = days >= 1 ? `${days} kun` : `${Math.floor((Date.now() - appeal.created_at) / 3600_000)} soat`;
+    return `• <code>${appeal.code}</code> — ${age} (${escapeHtml(appeal.author_name || 'noma\'lum')})\n  ${escapeHtml(cut(appeal.body, 90))}`;
+  });
+
+  const text = `🗓 <b>Kunlik xulosa</b> — ${today}\n\n` +
+    `🆕 Yangi: <b>${stats.new}</b>   ⏳ Ko'rilmoqda: <b>${stats.inProgress}</b>\n` +
+    `✅ Javob berilgan: <b>${stats.answered}</b>   📨 Oxirgi 24 soat: <b>${stats.last24h}</b>\n\n` +
+    (overdue.length
+      ? `⚠️ <b>${stats.overdue} ta murojaat ${config.slaHours} soatdan beri javobsiz:</b>\n\n${lines.join('\n')}` +
+        (stats.overdue > overdue.length ? `\n\n…va yana ${stats.overdue - overdue.length} ta.` : '')
+      : '✅ Javobsiz qolgan murojaat yo\'q. Rahmat!');
+
+  let sent = 0;
+  for (const chatId of config.notifyChatIds) {
+    try { await bot.api.sendMessage(chatId, text, { parse_mode: 'HTML' }); sent++; }
+    catch (err) { log.warn('kunlik xulosa yuborilmadi', { chat_id: chatId, error: String(err.message) }); }
+  }
+  log.info(`kunlik xulosa yuborildi (${sent} chat, ${stats.overdue} kechikkan)`);
+  return { sent: sent > 0, overdue: stats.overdue };
 }
 
 /** Fayl havolasini olish (admin panel yuklab olishi uchun; token serverda qoladi) */
@@ -526,4 +803,7 @@ async function setMyCommands() {
   ]);
 }
 
-module.exports = { bot, deliverReply, notifyOffice, getFilePath, setMyCommands, STATUS_LABEL };
+module.exports = {
+  bot, deliverReply, notifyOffice, notifyAuthorInProgress, sendDailyDigest,
+  getFilePath, setMyCommands, STATUS_LABEL,
+};

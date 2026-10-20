@@ -29,6 +29,10 @@
   <symbol id="i-logout" viewBox="0 0 24 24"><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4"/><path d="M10 12H3"/><path d="m6 8-3 4 3 4"/></symbol>
   <symbol id="i-phone" viewBox="0 0 24 24"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a1 1 0 0 1-1 1A16 16 0 0 1 4 5a1 1 0 0 1 1-1"/></symbol>
   <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l7 3v6c0 5-3 8-7 9-4-1-7-4-7-9V6z"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="i-note" viewBox="0 0 24 24"><path d="M5 4h14v16l-4-3H5z"/><path d="M8 9h8M8 13h5"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 4 3 20h18z"/><path d="M12 10v4M12 17h.01"/></symbol>
+  <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="12" r="4"/><path d="M12 12h9M18 12v4M15 12v3"/></symbol>
+  <symbol id="i-history" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/><path d="M12 8v4l3 2"/></symbol>
 </svg>
 
 <!-- =============================== KIRISH =============================== -->
@@ -91,7 +95,15 @@
         </button>
         <div class="usermenu__pop" id="user-pop" hidden>
           <span class="usermenu__role" id="user-role"></span>
-          <button class="usermenu__item" id="change-password" type="button">Parolni o'zgartirish</button>
+          <button class="usermenu__item" id="change-password" type="button">
+            <svg class="icon"><use href="#i-lock"></use></svg> Parolni o'zgartirish
+          </button>
+          <button class="usermenu__item" id="totp-toggle" type="button">
+            <svg class="icon"><use href="#i-key"></use></svg> <span id="totp-label">Ikki qadamli kirish</span>
+          </button>
+          <button class="usermenu__item" id="send-digest" type="button" data-owner hidden>
+            <svg class="icon"><use href="#i-send"></use></svg> Kunlik xulosani yuborish
+          </button>
           <button class="usermenu__item usermenu__item--danger" id="logout" type="button">
             <svg class="icon"><use href="#i-logout"></use></svg> Chiqish
           </button>
@@ -106,10 +118,21 @@
       <div class="stats" id="stats"></div>
 
       <div class="toolbar">
-        <div class="searchbox">
-          <svg class="icon"><use href="#i-search"></use></svg>
-          <input class="searchbox__input" id="search" type="search" placeholder="Matn, raqam, ism yoki telefon bo'yicha qidirish…" autocomplete="off">
+        <div class="toolbar__row">
+          <div class="searchbox">
+            <svg class="icon"><use href="#i-search"></use></svg>
+            <input class="searchbox__input" id="search" type="search" placeholder="Matn, raqam, ism yoki telefon bo'yicha qidirish…" autocomplete="off">
+          </div>
+          <div class="toolbar__actions">
+            <button class="btn btn--ghost btn--icon" id="refresh" type="button" title="Yangilash" aria-label="Yangilash">
+              <svg class="icon"><use href="#i-refresh"></use></svg>
+            </button>
+            <a class="btn btn--ghost" id="export" href="/api/export.csv" download>
+              <svg class="icon"><use href="#i-download"></use></svg><span>CSV</span>
+            </a>
+          </div>
         </div>
+        <div class="toolbar__row toolbar__row--filters">
         <div class="chips" id="status-chips" role="group" aria-label="Holat bo'yicha filtr">
           <button class="chip is-active" data-status="" type="button">Hammasi</button>
           <button class="chip" data-status="new" type="button">Yangi</button>
@@ -117,13 +140,15 @@
           <button class="chip" data-status="answered" type="button">Javob berilgan</button>
           <button class="chip" data-status="closed" type="button">Yopilgan</button>
         </div>
-        <div class="toolbar__actions">
-          <button class="btn btn--ghost btn--icon" id="refresh" type="button" title="Yangilash" aria-label="Yangilash">
-            <svg class="icon"><use href="#i-refresh"></use></svg>
+          <button class="chip chip--late" id="overdue-chip" type="button" title="Belgilangan muddatdan oshgan, javobsiz murojaatlar">
+            <svg class="icon"><use href="#i-alert"></use></svg> Kechikkan
           </button>
-          <a class="btn btn--ghost" id="export" href="/api/export.csv" download>
-            <svg class="icon"><use href="#i-download"></use></svg><span>CSV</span>
-          </a>
+          <div class="daterange">
+            <input class="input input--date" id="from-date" type="date" aria-label="Boshlanish sanasi">
+            <span class="daterange__dash">—</span>
+            <input class="input input--date" id="to-date" type="date" aria-label="Tugash sanasi">
+          </div>
+          <button class="btn btn--ghost btn--sm" id="clear-filters" type="button" hidden>Filtrni tozalash</button>
         </div>
       </div>
 
@@ -194,8 +219,10 @@
     <p class="modal__text" id="modal-text"></p>
     <div class="modal__fields" id="modal-fields"></div>
     <div class="modal__actions">
-      <button class="btn btn--ghost" value="cancel" type="submit">Bekor qilish</button>
-      <button class="btn btn--primary" value="ok" type="submit" id="modal-ok">Tasdiqlash</button>
+      <!-- "Tasdiqlash" DOM'da birinchi: Enter bosilganda shu ishlaydi.
+           Ko'rinishda CSS order bilan o'ng tomonda turadi. -->
+      <button class="btn btn--primary modal__ok" value="ok" type="submit" id="modal-ok">Tasdiqlash</button>
+      <button class="btn btn--ghost modal__cancel" value="cancel" type="submit">Bekor qilish</button>
     </div>
   </form>
 </dialog>

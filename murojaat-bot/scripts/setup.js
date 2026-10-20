@@ -72,8 +72,10 @@ NOTIFY_CHAT_IDS=${notifyIds}
 
 # --- Web ---
 PORT=8080
+HOST=127.0.0.1
 PUBLIC_URL=${publicUrl}
-TRUST_PROXY=1
+# nginx shu serverda bo'lsa "loopback" to'g'ri. Raqam (1) yozmang!
+TRUST_PROXY=loopback
 REQUIRE_HTTPS=${publicUrl ? 'true' : 'false'}
 
 # --- Maxfiy kalitlar (hech qachon o'zgartirmasdan nusxalamang) ---
@@ -89,6 +91,12 @@ FACULTY_NAME=Qo'qon universiteti Ta'lim fakulteti
 DEAN_NAME=Xursanaliyev Boburmirzo Farhod o'g'li
 DEAN_TITLE=dekan
 OFFICE_HOURS=Dushanba–Shanba, 09:00–17:00
+
+# --- Nazorat ---
+SLA_HOURS=48
+DIGEST_HOUR=9
+TZ_OFFSET_HOURS=5
+NOTIFY_USER_ON_PROGRESS=true
 
 # --- Murojaat chegaralari ---
 APPEAL_MIN_LENGTH=12
