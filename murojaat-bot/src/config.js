@@ -8,26 +8,49 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { HASH_PATTERN } = require('./security');
 
 /* ---- .env faylini o'qish (tashqi kutubxonasiz) ---- */
 function loadEnvFile(file) {
   if (!fs.existsSync(file)) return;
   for (const rawLine of fs.readFileSync(file, 'utf8').split(/\r?\n/)) {
-    const line = rawLine.trim();
+    const line = rawLine.trim().replace(/^export\s+/, '');
     if (!line || line.startsWith('#')) continue;
     const eq = line.indexOf('=');
     if (eq < 1) continue;
     const key = line.slice(0, eq).trim();
     let val = line.slice(eq + 1).trim();
     const quoted = (val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"));
-    if (quoted) val = val.slice(1, -1);
-    if (!(key in process.env)) process.env[key] = val;
+    if (quoted) {
+      val = val.slice(1, -1);
+    } else {
+      /* Satr ichidagi izohni kesamiz: "NODE_ENV=production   # izoh" */
+      val = val.replace(/\s+#.*$/, '').trim();
+    }
+    /* Bo'sh qiymatli o'zgaruvchi .env dagi qiymatni to'sib qo'ymasin */
+    if (process.env[key] === undefined || process.env[key] === '') process.env[key] = val;
   }
 }
 loadEnvFile(process.env.ENV_FILE || path.join(__dirname, '..', '.env'));
 
 const str = (key, def = '') => (process.env[key] === undefined || process.env[key] === '' ? def : String(process.env[key]).trim());
-const num = (key, def) => { const n = Number(process.env[key]); return Number.isFinite(n) ? n : def; };
+/* Sonli sozlamalar: noto'g'ri yoki chegaradan tashqari qiymat JIMGINA
+   sukutga tushmaydi — ro'yxatga olinadi va ishga tushishni to'xtatadi. */
+const numberIssues = [];
+const num = (key, def, { min = -Infinity, max = Infinity } = {}) => {
+  const raw = process.env[key];
+  if (raw === undefined || raw === '') return def;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) {
+    numberIssues.push(`${key}="${raw}" son emas (kutilgan: ${min}…${max}).`);
+    return def;
+  }
+  if (n < min || n > max) {
+    numberIssues.push(`${key}=${n} chegaradan tashqarida (ruxsat: ${min}…${max}).`);
+    return def;
+  }
+  return n;
+};
 const bool = (key, def) => {
   const v = str(key, '').toLowerCase();
   if (!v) return def;
@@ -52,7 +75,7 @@ const config = {
   isProd,
 
   /* --- HTTP --- */
-  port: num('PORT', 8080),
+  port: num('PORT', 8080, { min: 1, max: 65535 }),
   /* Standart: faqat loopback. Panel hech qachon to'g'ridan tashqi
      interfeysda tinglamasligi kerak — oldida nginx (TLS) turadi.
      Docker ichida HOST=0.0.0.0 qilinadi (konteyner tarmog'i uchun). */
@@ -76,24 +99,24 @@ const config = {
   adminUsername: str('ADMIN_USERNAME', 'admin'),
   adminPassword: str('ADMIN_PASSWORD'),            // faqat birinchi ishga tushishda; darhol hash qilinadi
   adminPasswordHash: str('ADMIN_PASSWORD_HASH'),   // tavsiya etilgan usul
-  sessionTtlHours: num('SESSION_TTL_HOURS', 12),
-  sessionIdleMinutes: num('SESSION_IDLE_MINUTES', 90),
-  loginMaxAttempts: num('LOGIN_MAX_ATTEMPTS', 8),
-  loginWindowMinutes: num('LOGIN_WINDOW_MINUTES', 15),
+  sessionTtlHours: num('SESSION_TTL_HOURS', 12, { min: 1, max: 720 }),
+  sessionIdleMinutes: num('SESSION_IDLE_MINUTES', 90, { min: 5, max: 1440 }),
+  loginMaxAttempts: num('LOGIN_MAX_ATTEMPTS', 8, { min: 3, max: 1000 }),
+  loginWindowMinutes: num('LOGIN_WINDOW_MINUTES', 15, { min: 1, max: 1440 }),
 
   /* --- Murojaat qoidalari (kategoriya yo'q — faqat hajm va spam chegaralari) --- */
-  appealMinLength: num('APPEAL_MIN_LENGTH', 12),
-  appealMaxLength: num('APPEAL_MAX_LENGTH', 3500),
-  appealsPerHour: num('APPEALS_PER_HOUR', 4),
-  appealsPerDay: num('APPEALS_PER_DAY', 12),
-  appealCooldownSeconds: num('APPEAL_COOLDOWN_SECONDS', 20),
-  maxAttachmentsPerAppeal: num('MAX_ATTACHMENTS_PER_APPEAL', 10),
-  maxAttachmentMb: num('MAX_ATTACHMENT_MB', 20),
+  appealMinLength: num('APPEAL_MIN_LENGTH', 12, { min: 1, max: 500 }),
+  appealMaxLength: num('APPEAL_MAX_LENGTH', 3500, { min: 100, max: 3900 }),
+  appealsPerHour: num('APPEALS_PER_HOUR', 4, { min: 1, max: 1000 }),
+  appealsPerDay: num('APPEALS_PER_DAY', 12, { min: 1, max: 10000 }),
+  appealCooldownSeconds: num('APPEAL_COOLDOWN_SECONDS', 20, { min: 0, max: 3600 }),
+  maxAttachmentsPerAppeal: num('MAX_ATTACHMENTS_PER_APPEAL', 10, { min: 1, max: 50 }),
+  maxAttachmentMb: num('MAX_ATTACHMENT_MB', 20, { min: 1, max: 2000 }),
 
   /* --- Nazorat: javobsiz qolgan murojaatlar va kunlik xulosa --- */
-  slaHours: num('SLA_HOURS', 48),                       // shu muddatdan oshsa "kechikkan"
-  digestHour: num('DIGEST_HOUR', 9),                    // kunlik xulosa soati (mahalliy vaqt)
-  tzOffsetHours: num('TZ_OFFSET_HOURS', 5),             // O'zbekiston: UTC+5
+  slaHours: num('SLA_HOURS', 48, { min: 1, max: 8760 }),                       // shu muddatdan oshsa "kechikkan"
+  digestHour: num('DIGEST_HOUR', 9, { min: 0, max: 23 }),                    // kunlik xulosa soati (mahalliy vaqt)
+  tzOffsetHours: num('TZ_OFFSET_HOURS', 5, { min: -12, max: 14 }),             // O'zbekiston: UTC+5
   notifyUserOnProgress: bool('NOTIFY_USER_ON_PROGRESS', true),
 
   /* --- Ma'lumotlar --- */
@@ -120,8 +143,13 @@ config.panelUrl = config.publicUrl || '';
    Tekshiruv: xatolar bo'lsa — tushunarli ro'yxat bilan to'xtaymiz
    ===================================================================== */
 function validate() {
-  const fatal = [];
+  const fatal = [...numberIssues];
   const warn = [];
+
+  if (!['production', 'development', 'test'].includes(NODE_ENV)) {
+    fatal.push(`NODE_ENV="${NODE_ENV}" noto'g'ri — faqat production, development yoki test. ` +
+      '(.env da satr ichida izoh yozgan bo\'lishingiz mumkin.)');
+  }
 
   if (!config.botToken) fatal.push('BOT_TOKEN ko\'rsatilmagan (@BotFather bergan token).');
   else if (!/^\d{5,}:[A-Za-z0-9_-]{30,}$/.test(config.botToken)) warn.push('BOT_TOKEN formati odatdagidan farq qiladi — tekshirib ko\'ring.');
@@ -146,8 +174,10 @@ function validate() {
     else if (config.adminPassword.length < 12) fatal.push('ADMIN_PASSWORD kamida 12 belgi bo\'lishi kerak.');
     else warn.push('ADMIN_PASSWORD ochiq matnda. Birinchi ishga tushishdan keyin uni .env dan olib tashlang (parol bazada hash ko\'rinishida saqlanadi).');
   }
-  if (config.adminPasswordHash && !config.adminPasswordHash.startsWith('scrypt$')) {
-    fatal.push('ADMIN_PASSWORD_HASH formati noto\'g\'ri — "npm run hash" bilan qaytadan yarating.');
+  if (config.adminPasswordHash && !HASH_PATTERN.test(config.adminPasswordHash)) {
+    fatal.push('ADMIN_PASSWORD_HASH formati noto\'g\'ri yoki to\'liq emas — "npm run hash" bilan qaytadan yarating. ' +
+      '(Agar docker-compose ishlatayotgan bo\'lsangiz, hash ichidagi "$" belgilari yo\'qolgan bo\'lishi mumkin — ' +
+      'yangi format "." bilan yoziladi.)');
   }
 
   if (isProd && !config.requireHttps) warn.push('REQUIRE_HTTPS o\'chirilgan — admin panel faqat HTTPS orqali ishlatilishi kerak.');

@@ -31,6 +31,17 @@ function ask(question, { hidden = false, def = '' } = {}) {
 }
 
 (async function main() {
+  /* Interaktiv bo'lmagan muhitda (quvur, CI) yarim-bo'sh .env yozib
+     "muvaffaqiyat" deb aldamaymiz — aniq ko'rsatma beramiz. */
+  if (!process.stdin.isTTY) {
+    console.error('\n  ⛔️ "npm run setup" interaktiv terminal talab qiladi.\n');
+    console.error('  Avtomatlashtirish uchun:');
+    console.error('    cp .env.example .env     # va qiymatlarni to\'ldiring');
+    console.error('    npm run hash -- "ParolingizBuYerda"   # ADMIN_PASSWORD_HASH uchun');
+    console.error('    node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'base64url\'))"  # kalitlar\n');
+    process.exit(1);
+  }
+
   console.log('\n  ┌─ Murojaat boti — sozlash ────────────────────────────────┐');
   console.log('  │  Kalitlar yaratiladi, parol hash qilinadi.               │');
   console.log('  └──────────────────────────────────────────────────────────┘\n');

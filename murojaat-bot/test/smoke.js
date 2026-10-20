@@ -776,6 +776,80 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     const afterLock = await request('/api/login', { method: 'POST', body: { username: 'admin', password: ADMIN_PASSWORD } });
     check('qulflanganda to\'g\'ri parol ham o\'tmaydi', afterLock.status === 429);
 
+    section('Tuzatilgan nuqsonlar: sozlama va joylashtirish');
+    {
+      const { execFileSync } = require('child_process');
+      const root = path.join(__dirname, '..');
+      const run = (args, extraEnv = {}) => {
+        try {
+          return { ok: true, out: execFileSync(process.execPath, args, { cwd: root, env: { ...process.env, ...extraEnv }, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }) };
+        } catch (err) {
+          return { ok: false, out: String(err.stdout || '') + String(err.stderr || '') };
+        }
+      };
+
+      /* prod-01: parol hashida "$" bo'lmasligi kerak (docker-compose uni buzadi) */
+      const hashed = run([path.join(root, 'scripts', 'hash-password.js'), 'TekshiruvParol2026']);
+      check('prod-01: hash "$" belgisisiz yoziladi', hashed.ok && /ADMIN_PASSWORD_HASH=scrypt\.[^$]+$/m.test(hashed.out), hashed.out.slice(0, 120));
+
+      /* prod-03: .env ichidagi satr oxiridagi izoh kesiladi */
+      const envFile = path.join(dataDir, 'izohli.env');
+      fs.writeFileSync(envFile, [
+        'NODE_ENV=development      # ishlab chiqarish emas',
+        'export APPEALS_PER_HOUR=7   # eksport prefiksi bilan',
+        'FACULTY_NAME="Izoh # ichida bo\'lsa saqlanadi"',
+      ].join('\n'));
+      const parsed = run(['-e', "const {config}=require('./src/config');console.log(JSON.stringify({env:config.nodeEnv,per:config.appealsPerHour,name:config.facultyName}))"],
+        { ENV_FILE: envFile, NODE_ENV: '', APPEALS_PER_HOUR: '', FACULTY_NAME: '' });
+      let parsedJson = {};
+      try { parsedJson = JSON.parse(parsed.out.trim().split('\n').pop()); } catch { /* xato */ }
+      check('prod-03: satr ichidagi izoh kesiladi', parsedJson.env === 'development' && parsedJson.per === 7, JSON.stringify(parsedJson));
+      check('prod-03: tirnoq ichidagi "#" saqlanadi', String(parsedJson.name || '').includes('#'), parsedJson.name);
+
+      /* prod-08: noto'g'ri sonli sozlama jimgina sukutga tushmaydi */
+      const badNum = run([path.join(root, 'src', 'index.js')], {
+        ENV_FILE: '/dev/null', NODE_ENV: 'development', BOT_TOKEN, SESSION_SECRET,
+        ADMIN_PASSWORD, DATA_DIR: fs.mkdtempSync(path.join(os.tmpdir(), 'murojaat-cfg-')),
+        LOGIN_MAX_ATTEMPTS: '0', APPEALS_PER_HOUR: '-1', BOT_MODE: 'polling', REQUIRE_HTTPS: 'false',
+      });
+      check('prod-08: chegaradan tashqari sozlama bilan server ishga tushmaydi',
+        !badNum.ok && badNum.out.includes('LOGIN_MAX_ATTEMPTS'), badNum.out.slice(-200));
+
+      /* prod-10: setup.js interaktiv bo'lmaganda yaroqsiz .env yozmaydi */
+      const setupRun = run([path.join(root, 'scripts', 'setup.js')]);
+      check('prod-10: setup TTYsiz aniq xato beradi', !setupRun.ok && setupRun.out.includes('interaktiv terminal'), setupRun.out.slice(0, 120));
+      check('prod-10: haqiqiy .env yaratilmadi', !fs.existsSync(path.join(root, '.env')));
+
+      /* prod-09: parolni tiklash skripti */
+      const resetDir = fs.mkdtempSync(path.join(os.tmpdir(), 'murojaat-reset-'));
+      const resetEnv = { ENV_FILE: '/dev/null', DATA_DIR: resetDir, BOT_TOKEN, SESSION_SECRET, ADMIN_PASSWORD, ADMIN_USERNAME: 'dekanat' };
+      run(['-e', "const db=require('./src/db');db.ensureOwner();db.close();"], resetEnv);
+      const reset = run([path.join(root, 'scripts', 'reset-password.js'), 'dekanat', 'TiklanganParol2026'], resetEnv);
+      const check2 = run(['-e', "const db=require('./src/db');const {verifyPassword}=require('./src/security');const a=db.getAdminByUsername('dekanat');console.log(JSON.stringify({eski:verifyPassword(process.env.ADMIN_PASSWORD,a.password_hash),yangi:verifyPassword('TiklanganParol2026',a.password_hash)}));db.close();"], resetEnv);
+      let resetJson = {};
+      try { resetJson = JSON.parse(check2.out.trim().split('\n').pop()); } catch { /* xato */ }
+      check('prod-09: parolni tiklash skripti ishlaydi', reset.ok && resetJson.yangi === true && resetJson.eski === false, JSON.stringify(resetJson));
+      fs.rmSync(resetDir, { recursive: true, force: true });
+
+      /* prod-04: nginx sozlamasi eski versiyalarda ham ishlashi uchun */
+      const nginxConf = fs.readFileSync(path.join(root, 'deploy', 'nginx.conf'), 'utf8');
+      check('prod-04: "http2 on;" ishlatilmaydi (eski nginx uchun)', !/^\s*http2\s+on;/m.test(nginxConf));
+      check('prod-04: limit_req_zone alohida faylda e\'lon qilingan',
+        fs.existsSync(path.join(root, 'deploy', 'nginx-limits.conf')) &&
+        fs.readFileSync(path.join(root, 'deploy', 'nginx-limits.conf'), 'utf8').includes('limit_req_zone'));
+
+      /* prod-06: systemd yo'llari README bilan mos */
+      const unit = fs.readFileSync(path.join(root, 'deploy', 'murojaat-bot.service'), 'utf8');
+      check('prod-06: systemd WorkingDirectory ilova papkasini ko\'rsatadi',
+        unit.includes('WorkingDirectory=/opt/murojaat-bot/murojaat-bot') &&
+        unit.includes('ReadWritePaths=/opt/murojaat-bot/murojaat-bot/data'));
+
+      /* prod-01: docker-compose Compose .env fayli bilan to'qnashmaydi */
+      const compose = fs.readFileSync(path.join(root, 'docker-compose.yml'), 'utf8');
+      check('prod-01: compose alohida secrets.env faylidan foydalanadi',
+        compose.includes('secrets.env') && !/env_file:\s*\n\s*-\s*\.env\s*$/m.test(compose));
+    }
+
     section('sec-01/03/04: HTTPS majburiyligi va proksi sarlavhalari');
     {
       const probe2 = http.createServer();
@@ -795,6 +869,10 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
         try { const r = await fetch(base2 + '/healthz', { redirect: 'manual' }); up = r.status === 200 || r.status === 308; } catch { await sleep(200); }
       }
       check('HTTPS rejimidagi instansiya ko\'tarildi', up, logs2.join('').slice(-200));
+
+      const health2 = await fetch(base2 + '/healthz', { redirect: 'manual' });
+      check('prod-05: /healthz HTTPS rejimida ham 200 qaytaradi (yo\'naltirilmaydi)',
+        health2.status === 200, 'status=' + health2.status);
 
       const spoofed = await fetch(base2 + '/api/login', {
         method: 'POST',

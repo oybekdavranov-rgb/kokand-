@@ -10,19 +10,24 @@ const crypto = require('crypto');
 /* ---- Parol: scrypt (OWASP tavsiyasi) ---- */
 const SCRYPT = { N: 32768, r: 8, p: 1, keylen: 64, maxmem: 128 * 1024 * 1024 };
 
+/* Bo'luvchi sifatida "." ishlatiladi: "$" belgisi .env va docker-compose
+   kabi muhitlarda o'zgaruvchi deb talqin qilinib, hashni buzib qo'yadi.
+   Eski ("$" bilan yozilgan) hashlar ham o'qilaveradi. */
+const HASH_PATTERN = /^scrypt[.$]\d+[.$]\d+[.$]\d+[.$][A-Za-z0-9_-]+[.$][A-Za-z0-9_-]+$/;
+
 function hashPassword(password) {
   if (typeof password !== 'string' || password.length < 8) {
     throw new Error('Parol kamida 8 belgi bo\'lishi kerak');
   }
   const salt = crypto.randomBytes(16);
   const hash = crypto.scryptSync(password, salt, SCRYPT.keylen, SCRYPT);
-  return ['scrypt', SCRYPT.N, SCRYPT.r, SCRYPT.p, salt.toString('base64url'), hash.toString('base64url')].join('$');
+  return ['scrypt', SCRYPT.N, SCRYPT.r, SCRYPT.p, salt.toString('base64url'), hash.toString('base64url')].join('.');
 }
 
 function verifyPassword(password, stored) {
   try {
     if (typeof password !== 'string' || typeof stored !== 'string') return false;
-    const [scheme, N, r, p, saltB64, hashB64] = stored.split('$');
+    const [scheme, N, r, p, saltB64, hashB64] = stored.split(/[.$]/);
     if (scheme !== 'scrypt') return false;
     const salt = Buffer.from(saltB64, 'base64url');
     const expected = Buffer.from(hashB64, 'base64url');
@@ -181,7 +186,7 @@ function cut(text, maxLength, suffix = '…') {
 }
 
 module.exports = {
-  hashPassword, verifyPassword, safeEqual, randomToken, sha256, keyedHash, cut,
+  HASH_PATTERN, hashPassword, verifyPassword, safeEqual, randomToken, sha256, keyedHash, cut,
   verifyTotp, totpCode, generateTotpSecret, base32Decode,
   RateLimiter, serializeCookie, parseCookies, escapeHtml, sanitizeText,
 };

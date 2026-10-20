@@ -123,37 +123,49 @@ xulosani istalgan vaqtda qo'lda ham yuborish mumkin.
 ### A. VPS + nginx + systemd (tavsiya etiladi)
 
 ```bash
-# 1) Kod va bog'liqliklar
-sudo useradd -r -m -d /opt/murojaat-bot murojaat
+# 1) Foydalanuvchi va kod (home papkasi bo'sh bo'lishi kerak — shuning uchun "-m" YO'Q)
+sudo useradd -r -d /opt/murojaat-bot -s /usr/sbin/nologin murojaat
+sudo mkdir -p /opt/murojaat-bot && sudo chown murojaat:murojaat /opt/murojaat-bot
 sudo -u murojaat git clone <repo> /opt/murojaat-bot
-cd /opt/murojaat-bot/murojaat-bot && sudo -u murojaat npm ci --omit=dev
 
-# 2) Sozlash
+# 2) Bog'liqliklar va sozlash (ilova /opt/murojaat-bot/murojaat-bot ichida)
+cd /opt/murojaat-bot/murojaat-bot
+sudo -u murojaat npm ci --omit=dev
 sudo -u murojaat npm run setup
 sudo chmod 600 .env
 
-# 3) Xizmat
+# 3) Xizmat (unit faylidagi yo'llar aynan shu joylashuvga mos)
 sudo cp deploy/murojaat-bot.service /etc/systemd/system/
 sudo systemctl daemon-reload && sudo systemctl enable --now murojaat-bot
 sudo journalctl -u murojaat-bot -f
 
-# 4) HTTPS va nginx
+# 4) HTTPS va nginx (ikkita fayl: so'rov chegarasi "http" blokiga qo'yiladi)
+sudo cp deploy/nginx-limits.conf /etc/nginx/conf.d/murojaat-limits.conf
 sudo cp deploy/nginx.conf /etc/nginx/sites-available/murojaat
 sudo ln -s /etc/nginx/sites-available/murojaat /etc/nginx/sites-enabled/
-sudo certbot --nginx -d murojaat.example.uz
 sudo nginx -t && sudo systemctl reload nginx
+sudo certbot --nginx -d murojaat.example.uz
 
 # 5) Webhook (BOT_MODE=webhook bo'lsa)
 sudo -u murojaat npm run webhook set
 ```
 
+> `deploy/murojaat-bot.service` ichidagi yo'llar `/opt/murojaat-bot/murojaat-bot`
+> ga sozlangan. Boshqa joyga o'rnatsangiz, unit faylidagi `WorkingDirectory`,
+> `EnvironmentFile` va `ReadWritePaths` ni ham o'zgartiring.
+
 ### B. Docker
 
 ```bash
-cp .env.example .env     # to'ldiring (npm run setup ham ishlaydi)
+cp .env.example secrets.env   # to'ldiring (yoki: npm run setup && cp .env secrets.env)
 docker compose up -d --build
 docker compose logs -f
 ```
+
+> **Muhim:** Docker uchun sozlamalar `.env` emas, **`secrets.env`** faylida
+> saqlanadi. Compose o'zining `.env` faylidagi `$` belgilarini o'zgaruvchi deb
+> talqin qiladi va parol hashini buzib qo'yadi — shu sababli alohida fayl
+> ishlatiladi. (Hash endi `$` o'rniga `.` bilan yoziladi, bu ham qo'shimcha himoya.)
 
 ### C. Polling yoki webhook?
 
@@ -237,6 +249,11 @@ Tizimda amalga oshirilgan himoya choralari:
 - O'chirilgan murojaatni faqat `owner` ko'radi; holati o'zgartirilmaydi, tiklash mumkin.
 - Faqat **o'z** telefon raqamini ulashish mumkin (begona kontakt qabul qilinmaydi).
 
+> **Parol qayerda saqlanadi?** `.env` dagi `ADMIN_PASSWORD_HASH` faqat **eng birinchi**
+> ishga tushishda o'qiladi — keyin parol bazada saqlanadi. Shuning uchun parolni
+> keyinchalik `.env` orqali emas, panel («Parolni o'zgartirish») yoki
+> `npm run reset-password` orqali almashtiring.
+
 **Sizning zimmangizdagi ishlar**
 1. `.env` faylini `chmod 600` qiling va hech kimga bermang (ayniqsa `BOT_TOKEN`).
 2. Panelni faqat HTTPS orqali oching (`REQUIRE_HTTPS=true`), sertifikatni yangilab turing.
@@ -257,11 +274,16 @@ npm run backup                  # data/backups/murojaat-2026-10-19-18-30.db
 0 2 * * * cd /opt/murojaat-bot/murojaat-bot && /usr/bin/npm run backup >> /var/log/murojaat-backup.log 2>&1
 ```
 
-Tiklash: xizmatni to'xtating, zaxira faylini `data/murojaat.db` o'rniga qo'ying, qayta ishga tushiring.
+**Tiklash.** Baza WAL rejimida ishlaydi, shuning uchun `-wal` va `-shm` fayllarini
+ham o'chirish **shart** — aks holda eski yozuvlar tiklangan baza ustiga qaytadan
+yozilib, zaxirani bekor qiladi:
 
 ```bash
 sudo systemctl stop murojaat-bot
-sudo -u murojaat cp data/backups/murojaat-....db data/murojaat.db
+cd /opt/murojaat-bot/murojaat-bot
+sudo -u murojaat rm -f data/murojaat.db data/murojaat.db-wal data/murojaat.db-shm
+sudo -u murojaat cp data/backups/murojaat-2026-10-20-02-00.db data/murojaat.db
+sudo -u murojaat chmod 600 data/murojaat.db
 sudo systemctl start murojaat-bot
 ```
 
@@ -276,7 +298,8 @@ sudo systemctl start murojaat-bot
 | `npm run hash -- "parol"` | parol hashini olish |
 | `npm run webhook set\|info\|delete` | webhook boshqaruvi |
 | `npm run backup` | bazaning zaxira nusxasi |
-| `npm test` | uchdan-uchiga tekshiruv (135 ta test, Telegram'siz) |
+| `npm run reset-password -- <login> "<parol>"` | parolni unutganda yangilash (sessiyalar bekor qilinadi) |
+| `npm test` | uchdan-uchiga tekshiruv (147 ta test, Telegram'siz) |
 
 ---
 
@@ -286,7 +309,7 @@ sudo systemctl start murojaat-bot
 |---|---|
 | `⛔️ Sozlamalarda xato` | ro'yxatdagi kalitlarni `.env` ga qo'shing; `npm run setup` yordam beradi |
 | Bot javob bermayapti | `npm run webhook info` — xatoni ko'ring; polling'da token to'g'riligini tekshiring |
-| Panelga kira olmayapman | 15 daqiqa kutib qayta urinib ko'ring (qulflash), yoki `npm run hash` bilan yangi parol qo'ying |
+| Panelga kira olmayapman | 15 daqiqa kutib qayta urinib ko'ring (qulflash). Parolni unutgan bo'lsangiz: `npm run reset-password -- <login> "<yangi parol>"` |
 | «Sessiya tugadi» tez-tez | `SESSION_IDLE_MINUTES` ni oshiring; VPN/brauzer o'zgarishi sessiyani bekor qiladi |
 | Javob yetmadi | foydalanuvchi botni bloklagan bo'lishi mumkin — panelda «yetkazilmadi» belgisi chiqadi |
 | Fayl ochilmadi | Telegram fayllari muddati o'tgan bo'lishi mumkin; murojaat egasidan qayta so'rang |

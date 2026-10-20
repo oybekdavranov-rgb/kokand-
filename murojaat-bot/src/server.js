@@ -131,6 +131,14 @@ function createApp() {
   app.set('etag', false);
   if (config.trustProxy) app.set('trust proxy', /^\d+$/.test(config.trustProxy) ? Number(config.trustProxy) : config.trustProxy);
 
+  /* --- Holat tekshiruvi: HTTPS yo'naltirishidan OLDIN turadi, aks holda
+         Docker/monitoring tekshiruvi 308 redirect sababli doim yiqiladi --- */
+  app.get(['/healthz', '/api/health'], (req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.json({ ok: true, mode: config.botMode, time: new Date().toISOString() });
+  });
+
   /* --- Xavfsizlik sarlavhalari + HTTPS majburiyligi --- */
   app.use((req, res, next) => {
     res.setHeader('Content-Security-Policy', [
@@ -172,12 +180,6 @@ function createApp() {
       webhookCallback(bot, 'express', { secretToken: config.webhookSecret, timeoutMilliseconds: 25_000, onTimeout: 'return' }));
     log.info('webhook yo\'li tayyor', { path: config.webhookPath });
   }
-
-  /* --- Holat tekshiruvi (monitoring uchun) --- */
-  app.get(['/healthz', '/api/health'], (req, res) => {
-    res.setHeader('Cache-Control', 'no-store');
-    res.json({ ok: true, mode: config.botMode, time: new Date().toISOString() });
-  });
 
   /* --- API: umumiy chegara va keshsizlik --- */
   app.use('/api', (req, res, next) => {

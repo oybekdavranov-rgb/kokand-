@@ -2,9 +2,16 @@ services:
   murojaat-bot:
     build: .
     restart: unless-stopped
-    env_file: .env
+    # DIQQAT: Compose o'zining ".env" faylini alohida maqsadda ishlatadi va
+    # qiymatlar ichidagi "$" belgilarini o'zgaruvchi deb talqin qiladi.
+    # Shu sababli konteyner sozlamalari ALOHIDA faylda saqlanadi:
+    #   cp .env secrets.env     (yoki to'g'ridan-to'g'ri secrets.env yarating)
+    env_file:
+      - path: ./secrets.env
+        required: true
     environment:
       DATA_DIR: /data
+      HOST: "0.0.0.0"
       PORT: "8080"
     ports:
       - "127.0.0.1:8080:8080"     # faqat lokal: tashqariga nginx chiqaradi

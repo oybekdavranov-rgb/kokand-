@@ -1,5 +1,6 @@
 # =====================================================================
 #  systemd xizmati (VPS uchun)
+#  Ilova joyi: /opt/murojaat-bot/murojaat-bot  (repo /opt/murojaat-bot ga klon qilinadi)
 #  Joylash:  sudo cp deploy/murojaat-bot.service /etc/systemd/system/
 #            sudo systemctl daemon-reload && sudo systemctl enable --now murojaat-bot
 # =====================================================================
@@ -12,8 +13,8 @@ Wants=network-online.target
 Type=simple
 User=murojaat
 Group=murojaat
-WorkingDirectory=/opt/murojaat-bot
-EnvironmentFile=/opt/murojaat-bot/.env
+WorkingDirectory=/opt/murojaat-bot/murojaat-bot
+EnvironmentFile=/opt/murojaat-bot/murojaat-bot/.env
 ExecStart=/usr/bin/node src/index.js
 Restart=always
 RestartSec=5
@@ -30,7 +31,7 @@ ProtectHome=true
 ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectControlGroups=true
-ReadWritePaths=/opt/murojaat-bot/data
+ReadWritePaths=/opt/murojaat-bot/murojaat-bot/data
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
 RestrictNamespaces=true
 LockPersonality=true
