@@ -6,6 +6,9 @@
    Tashqi kutubxona ishlatilmaydi — faqat Node'ning 'crypto' moduli.
    ===================================================================== */
 const crypto = require('crypto');
+const { promisify } = require('util');
+
+const scryptAsync = promisify(crypto.scrypt);
 
 /* ---- Parol: scrypt (OWASP tavsiyasi) ---- */
 const SCRYPT = { N: 32768, r: 8, p: 1, keylen: 64, maxmem: 128 * 1024 * 1024 };
@@ -24,17 +27,48 @@ function hashPassword(password) {
   return ['scrypt', SCRYPT.N, SCRYPT.r, SCRYPT.p, salt.toString('base64url'), hash.toString('base64url')].join('.');
 }
 
+function parseHash(stored) {
+  const [scheme, N, r, p, saltB64, hashB64] = String(stored).split(/[.$]/);
+  if (scheme !== 'scrypt') return null;
+  return {
+    params: { N: Number(N), r: Number(r), p: Number(p), maxmem: SCRYPT.maxmem },
+    salt: Buffer.from(saltB64, 'base64url'),
+    expected: Buffer.from(hashB64, 'base64url'),
+  };
+}
+
 function verifyPassword(password, stored) {
   try {
     if (typeof password !== 'string' || typeof stored !== 'string') return false;
-    const [scheme, N, r, p, saltB64, hashB64] = stored.split(/[.$]/);
-    if (scheme !== 'scrypt') return false;
-    const salt = Buffer.from(saltB64, 'base64url');
-    const expected = Buffer.from(hashB64, 'base64url');
-    const actual = crypto.scryptSync(password, salt, expected.length, {
-      N: Number(N), r: Number(r), p: Number(p), maxmem: SCRYPT.maxmem,
-    });
-    return actual.length === expected.length && crypto.timingSafeEqual(actual, expected);
+    const parsed = parseHash(stored);
+    if (!parsed) return false;
+    const actual = crypto.scryptSync(password, parsed.salt, parsed.expected.length, parsed.params);
+    return actual.length === parsed.expected.length && crypto.timingSafeEqual(actual, parsed.expected);
+  } catch {
+    return false;
+  }
+}
+
+/* --- Asinxron variantlar ---
+   scrypt ataylab "qimmat" (≈100 ms). Sinxron chaqiruv Node'ning yagona ipini
+   bloklaydi: login so'rovlari ko'paysa, panel ham, Telegram webhook ham
+   javob bermay qoladi. Shuning uchun so'rov ichida FAQAT shular ishlatiladi. */
+async function hashPasswordAsync(password) {
+  if (typeof password !== 'string' || password.length < 8) {
+    throw new Error('Parol kamida 8 belgi bo\'lishi kerak');
+  }
+  const salt = crypto.randomBytes(16);
+  const hash = await scryptAsync(password, salt, SCRYPT.keylen, SCRYPT);
+  return ['scrypt', SCRYPT.N, SCRYPT.r, SCRYPT.p, salt.toString('base64url'), hash.toString('base64url')].join('.');
+}
+
+async function verifyPasswordAsync(password, stored) {
+  try {
+    if (typeof password !== 'string' || typeof stored !== 'string') return false;
+    const parsed = parseHash(stored);
+    if (!parsed) return false;
+    const actual = await scryptAsync(password, parsed.salt, parsed.expected.length, parsed.params);
+    return actual.length === parsed.expected.length && crypto.timingSafeEqual(actual, parsed.expected);
   } catch {
     return false;
   }
@@ -186,7 +220,7 @@ function cut(text, maxLength, suffix = '…') {
 }
 
 module.exports = {
-  HASH_PATTERN, hashPassword, verifyPassword, safeEqual, randomToken, sha256, keyedHash, cut,
+  HASH_PATTERN, hashPassword, verifyPassword, hashPasswordAsync, verifyPasswordAsync, safeEqual, randomToken, sha256, keyedHash, cut,
   verifyTotp, totpCode, generateTotpSecret, base32Decode,
   RateLimiter, serializeCookie, parseCookies, escapeHtml, sanitizeText,
 };

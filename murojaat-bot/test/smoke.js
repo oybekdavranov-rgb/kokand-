@@ -60,6 +60,14 @@ function mockApi() {
         case 'getMe':
           return reply({ id: 42, is_bot: true, first_name: 'Murojaat', username: 'murojaat_test_bot', can_join_groups: true, can_read_all_group_messages: false, supports_inline_queries: false });
         case 'sendMessage': {
+          if (String(body.chat_id) === '910') {      // uchinchi bo'lakdan boshlab chegara
+            const seen = (sent.filter((m) => String(m.chat_id) === '910').length);
+            if (seen >= 2) {
+              res.writeHead(429, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ ok: false, error_code: 429, description: 'Too Many Requests: retry after 0', parameters: { retry_after: 0 } }));
+              return;
+            }
+          }
           if (String(body.chat_id) === '909') {      // "bot bloklangan" holatini taqlid qilamiz
             res.writeHead(403, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ ok: false, error_code: 403, description: 'Forbidden: bot was blocked by the user' }));
@@ -105,6 +113,7 @@ async function request(pathname, { method = 'GET', body, headers = {}, withCsrf 
 }
 
 let updateId = 1;
+let photo = null;
 const sendUpdate = (update, secret = WEBHOOK_SECRET) =>
   fetch(BASE + WEBHOOK_PATH, {
     method: 'POST',
@@ -505,7 +514,7 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     /* bot-02 / bot-07 / bot-09: albom (caption oxirida keladi) */
     sent.length = 0;
     const albumId = 'mg-test-1';
-    const photo = (n) => ([
+    photo = (n) => ([
       { file_id: `s${n}`, file_unique_id: `us${n}`, width: 90, height: 90, file_size: 800 },
       { file_id: `b${n}`, file_unique_id: `ub${n}`, width: 1280, height: 960, file_size: 50_000 },
     ]);
@@ -739,7 +748,7 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     check('zaif parol qabul qilinmaydi', weak.status === 400 && weak.json.error === 'weak_password');
 
     /* operator huquqi cheklanganini tekshiramiz */
-    const ownerCookie = cookie;
+    const ownerCookie = cookie, ownerCsrfSaved = csrf;
     cookie = '';
     const operatorLogin = await request('/api/login', { method: 'POST', body: { username: 'operator1', password: 'OperatorParol2026' } });
     csrf = operatorLogin.json.csrf;
@@ -751,6 +760,146 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     check('operator kunlik xulosa yubora olmaydi', (await request('/api/digest', { method: 'POST' })).status === 403);
     const opNote = await request(`/api/appeals/${appeal.id}/notes`, { method: 'POST', body: { body: 'Operator izohi' } });
     check('operator ichki izoh yoza oladi', opNote.status === 200);
+
+    section('Tekshiruvda topilgan yangi nuqsonlar');
+    /* Owner sessiyasini tiklaymiz (oldingi bo'lim operator hisobiga o'tgan edi) */
+    cookie = ownerCookie; csrf = ownerCsrfSaved;
+
+    /* YANGI-1: qulflangan so'rov yangi "xato urinish" sifatida yozilmasligi kerak
+       (aks holda hujumchi qulfni cheksiz ushlab turadi) */
+    {
+      const probe3 = http.createServer();
+      const port3 = await listen(probe3);
+      await new Promise((r) => probe3.close(r));
+      const lockDir = fs.mkdtempSync(path.join(os.tmpdir(), 'murojaat-lock-'));
+      const lockChild = spawn(process.execPath, [path.join(__dirname, '..', 'src', 'index.js')], {
+        env: { ...env, PORT: String(port3), PUBLIC_URL: `http://127.0.0.1:${port3}`, DATA_DIR: lockDir, LOGIN_MAX_ATTEMPTS: '3' },
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      const lockBase = `http://127.0.0.1:${port3}`;
+      let lockUp = false;
+      for (let i = 0; i < 40 && !lockUp; i++) {
+        try { lockUp = (await fetch(lockBase + '/healthz')).ok; } catch { await sleep(200); }
+      }
+      const tryLogin = (pw) => fetch(lockBase + '/api/login', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'User-Agent': UA },
+        body: JSON.stringify({ username: 'admin', password: pw }),
+      });
+      for (let i = 0; i < 4; i++) await tryLogin('xato' + i);
+      const lockedNow = await tryLogin('yana-xato');
+      check('yangi-1: qulflash ishlaydi', lockedNow.status === 429, 'status=' + lockedNow.status);
+
+      const lockDb = new Database(path.join(lockDir, 'murojaat.db'));
+      const before = lockDb.prepare('SELECT COUNT(*) AS n FROM login_attempts').get().n;
+      for (let i = 0; i < 5; i++) await tryLogin('hujum' + i);      // qulflangan holatda
+      const after = lockDb.prepare('SELECT COUNT(*) AS n FROM login_attempts').get().n;
+      lockDb.close();
+      check('yangi-1: qulflangan so\'rovlar qulfni uzaytirmaydi (yangi yozuv yo\'q)',
+        after === before, `oldin=${before} keyin=${after}`);
+
+      lockChild.kill('SIGTERM'); await sleep(300); lockChild.kill('SIGKILL');
+      fs.rmSync(lockDir, { recursive: true, force: true });
+    }
+
+    /* YANGI-2: parol tekshiruvi event-loop'ni bloklamasligi kerak */
+    {
+      const probe4 = http.createServer();
+      const port4 = await listen(probe4);
+      await new Promise((r) => probe4.close(r));
+      const loadDir = fs.mkdtempSync(path.join(os.tmpdir(), 'murojaat-load-'));
+      const loadChild = spawn(process.execPath, [path.join(__dirname, '..', 'src', 'index.js')], {
+        env: { ...env, PORT: String(port4), PUBLIC_URL: `http://127.0.0.1:${port4}`, DATA_DIR: loadDir, LOGIN_MAX_ATTEMPTS: '1000' },
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      const loadBase = `http://127.0.0.1:${port4}`;
+      let loadUp = false;
+      for (let i = 0; i < 40 && !loadUp; i++) {
+        try { loadUp = (await fetch(loadBase + '/healthz')).ok; } catch { await sleep(200); }
+      }
+      const logins = Array.from({ length: 12 }, (_, i) => fetch(loadBase + '/api/login', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'User-Agent': UA },
+        body: JSON.stringify({ username: 'yoq-odam-' + i, password: 'xato-parol-' + i }),
+      }).catch(() => null));
+      await sleep(30);
+      const started = process.hrtime.bigint();
+      const healthDuringLoad = await fetch(loadBase + '/healthz');
+      const elapsedMs = Number(process.hrtime.bigint() - started) / 1e6;
+      await Promise.all(logins);
+      check('yangi-2: 12 ta login paytida ham server javob beradi (event-loop bloklanmaydi)',
+        healthDuringLoad.status === 200 && elapsedMs < 1500, `javob vaqti: ${Math.round(elapsedMs)} ms`);
+
+      loadChild.kill('SIGTERM'); await sleep(300); loadChild.kill('SIGKILL');
+      fs.rmSync(loadDir, { recursive: true, force: true });
+    }
+
+    /* YANGI-3: dekanning shaxsiy chatida begona xabarga "reply" jim yo'qolmasligi kerak */
+    sent.length = 0;
+    await sendUpdate({
+      message: {
+        message_id: ++messageId, date: Math.floor(Date.now() / 1000),
+        chat: { id: 998, type: 'private' }, from: { id: 998, is_bot: false, first_name: 'Dekan' },
+        text: 'Bu botning eski xabariga javob — murojaat sifatida qabul qilinishi kerak.',
+        reply_to_message: { message_id: 999_999, date: 0, chat: { id: 998, type: 'private' }, text: 'eski xabar' },
+      },
+    });
+    await sleep(300);
+    check('yangi-3: xabarnomaga tegishli bo\'lmagan reply jim yo\'qolmaydi',
+      sent.some((m) => String(m.chat_id) === '998'), JSON.stringify(sent).slice(0, 150));
+
+    /* YANGI-4: bir vaqtda kelgan ikki albom ham to'liq qayta ishlanadi */
+    sent.length = 0;
+    for (const [chat, group] of [[921, 'alb-A'], [922, 'alb-B']]) {
+      for (let i = 1; i <= 2; i++) {
+        await sendUpdate({
+          message: {
+            message_id: ++messageId, date: Math.floor(Date.now() / 1000),
+            chat: { id: chat, type: 'private' }, from: { id: chat, is_bot: false, first_name: 'Albom' + chat },
+            media_group_id: group, photo: photo(30 + chat + i),
+            ...(i === 2 ? { caption: `Albom ${group} uchun izoh matni, tekshirib bering.` } : {}),
+          },
+        });
+        await sleep(50);
+      }
+    }
+    await sleep(3200);
+    const albumsResponse = await request('/api/appeals?search=' + encodeURIComponent('uchun izoh matni'));
+    const albumRows = albumsResponse.json?.rows || [];
+    check('yangi-4: parallel albomlar yo\'qolmaydi',
+      albumsResponse.json?.total === 2 && albumRows.every((r) => r.attachmentsCount === 2),
+      `status=${albumsResponse.status} javob=${JSON.stringify(albumsResponse.json).slice(0, 160)}`);
+
+    /* YANGI-5: uzun javobning qisman yetkazilishi aniq yoziladi */
+    sent.length = 0;
+    await sendUpdate(textUpdate('Chegaraga uchraydigan uzun javob uchun murojaat matni.', { id: 910, first_name: 'Chegara429' }));
+    await sleep(250);
+    const limited = (await request('/api/appeals?search=' + encodeURIComponent('Chegaraga uchraydigan'))).json.rows[0];
+    const longReply2 = await request(`/api/appeals/${limited.id}/reply`, { method: 'POST', body: { body: '"'.repeat(1200) + ' ikkinchi bo\'lak ' + 'y'.repeat(1500) + ' uchinchi bo\'lak ' + 'z'.repeat(1500) } });
+    check('yangi-5: qisman yetkazilish 502 bilan bildiriladi', longReply2.status === 502, 'status=' + longReply2.status);
+    const limitedDetail = await request('/api/appeals/' + limited.id);
+    check('yangi-5: nechta bo\'lak yetkazilgani yozib qo\'yiladi',
+      /\d+\/\d+ bo'lak yetkazildi/.test(String(limitedDetail.json.replies[0].deliveryError)),
+      String(limitedDetail.json.replies[0].deliveryError).slice(0, 120));
+
+    /* YANGI-6: arxivlangan murojaatning fayli operatorga berilmaydi */
+    const fileAppeal = (await request('/api/appeals?limit=50')).json.rows.find((r) => r.attachmentsCount > 0);
+    const fileDetail2 = await request('/api/appeals/' + fileAppeal.id);
+    const secretFileId = fileDetail2.json.attachments[0].id;
+    await request(`/api/appeals/${fileAppeal.id}/delete`, { method: 'POST' });
+    const ownerCookie2 = cookie, ownerCsrf2 = csrf;
+    cookie = '';
+    const opLogin = await request('/api/login', { method: 'POST', body: { username: 'operator1', password: 'OperatorParol2026' } });
+    csrf = opLogin.json.csrf;
+    const opFile = await fetch(`${BASE}/api/attachments/${secretFileId}`, { headers: { Cookie: cookie, 'User-Agent': UA } });
+    check('yangi-6: operator arxivlangan murojaat faylini ololmaydi', opFile.status === 404, 'status=' + opFile.status);
+    cookie = ownerCookie2; csrf = ownerCsrf2;
+    const ownerFile = await fetch(`${BASE}/api/attachments/${secretFileId}`, { headers: { Cookie: cookie, 'User-Agent': UA } });
+    check('yangi-6: owner esa ololadi', ownerFile.status === 200, 'status=' + ownerFile.status);
+    await request(`/api/appeals/${fileAppeal.id}/restore`, { method: 'POST' });
+
+    /* Keyingi bo'lim operator sessiyasidan boshlanadi — holatni tiklaymiz */
+    cookie = '';
+    const operatorAgain = await request('/api/login', { method: 'POST', body: { username: 'operator1', password: 'OperatorParol2026' } });
+    csrf = operatorAgain.json.csrf;
 
     section('Sessiya xavfsizligi');
     const otherUa = await request('/api/me', { ua: 'boshqa-brauzer/9' });
@@ -815,6 +964,15 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
       check('prod-08: chegaradan tashqari sozlama bilan server ishga tushmaydi',
         !badNum.ok && badNum.out.includes('LOGIN_MAX_ATTEMPTS'), badNum.out.slice(-200));
 
+      /* YANGI-7: kasrli qiymat jimgina qabul qilinmaydi (DIGEST_HOUR=9.5 xulosani o'chirardi) */
+      const fractional = run([path.join(root, 'src', 'index.js')], {
+        ENV_FILE: '/dev/null', NODE_ENV: 'development', BOT_TOKEN, SESSION_SECRET,
+        ADMIN_PASSWORD, DATA_DIR: fs.mkdtempSync(path.join(os.tmpdir(), 'murojaat-frac-')),
+        DIGEST_HOUR: '9.5', BOT_MODE: 'polling', REQUIRE_HTTPS: 'false',
+      });
+      check('yangi-7: kasrli DIGEST_HOUR qabul qilinmaydi',
+        !fractional.ok && fractional.out.includes('butun son'), fractional.out.slice(-150));
+
       /* prod-10: setup.js interaktiv bo'lmaganda yaroqsiz .env yozmaydi */
       const setupRun = run([path.join(root, 'scripts', 'setup.js')]);
       check('prod-10: setup TTYsiz aniq xato beradi', !setupRun.ok && setupRun.out.includes('interaktiv terminal'), setupRun.out.slice(0, 120));
@@ -842,7 +1000,11 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
       const unit = fs.readFileSync(path.join(root, 'deploy', 'murojaat-bot.service'), 'utf8');
       check('prod-06: systemd WorkingDirectory ilova papkasini ko\'rsatadi',
         unit.includes('WorkingDirectory=/opt/murojaat-bot/murojaat-bot') &&
-        unit.includes('ReadWritePaths=/opt/murojaat-bot/murojaat-bot/data'));
+        unit.includes('EnvironmentFile=/opt/murojaat-bot/murojaat-bot/.env'));
+      check('yangi-8: ma\'lumot papkasini systemd o\'zi yaratadi (StateDirectory)',
+        unit.includes('StateDirectory=murojaat-bot') &&
+        unit.includes('Environment=DATA_DIR=/var/lib/murojaat-bot') &&
+        !unit.includes('ReadWritePaths='));
 
       /* prod-01: docker-compose Compose .env fayli bilan to'qnashmaydi */
       const compose = fs.readFileSync(path.join(root, 'docker-compose.yml'), 'utf8');

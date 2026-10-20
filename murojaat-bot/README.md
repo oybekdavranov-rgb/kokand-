@@ -146,13 +146,24 @@ sudo ln -s /etc/nginx/sites-available/murojaat /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx
 sudo certbot --nginx -d murojaat.example.uz
 
-# 5) Webhook (BOT_MODE=webhook bo'lsa)
+# 5) Xavfsizlik devori: tashqariga faqat 80/443 ochiq bo'lsin
+sudo ufw allow 80,443/tcp
+sudo ufw deny 8080/tcp          # panel porti faqat nginx orqali
+sudo ufw enable
+
+# 6) Webhook (BOT_MODE=webhook bo'lsa)
 sudo -u murojaat npm run webhook set
 ```
 
 > `deploy/murojaat-bot.service` ichidagi yo'llar `/opt/murojaat-bot/murojaat-bot`
-> ga sozlangan. Boshqa joyga o'rnatsangiz, unit faylidagi `WorkingDirectory`,
-> `EnvironmentFile` va `ReadWritePaths` ni ham o'zgartiring.
+> ga sozlangan. Boshqa joyga o'rnatsangiz, unit faylidagi `WorkingDirectory` va
+> `EnvironmentFile` ni ham o'zgartiring.
+>
+> **Ma'lumotlar qayerda?** systemd rejimida baza `/var/lib/murojaat-bot/` da
+> saqlanadi — papkani systemd o'zi yaratadi va huquqini (0700) beradi, shuning
+> uchun qo'lda `mkdir` qilish shart emas. Zaxira buyruqlarini ham shu
+> foydalanuvchi nomidan bajaring:
+> `sudo -u murojaat DATA_DIR=/var/lib/murojaat-bot npm run backup`
 
 ### B. Docker
 
@@ -248,6 +259,12 @@ Tizimda amalga oshirilgan himoya choralari:
 - Emoji/maxsus belgilar matn kesilganda buzilmaydi (UTF-16 xavfsiz kesish).
 - O'chirilgan murojaatni faqat `owner` ko'radi; holati o'zgartirilmaydi, tiklash mumkin.
 - Faqat **o'z** telefon raqamini ulashish mumkin (begona kontakt qabul qilinmaydi).
+- Parol tekshiruvi **asinxron** (scrypt event-loop'ni bloklamaydi) — ko'p sonli
+  login urinishi panelni ham, botni ham sekinlashtirmaydi.
+- Hisob darajasidagi qulflash faqat **turli IP'lardan** hujum bo'lganda ishlaydi va
+  qulflangan so'rovlar yangi urinish sifatida yozilmaydi — shu sababli hujumchi
+  adminni panelдан uzib qo'ya olmaydi.
+- Arxivlangan murojaatning **fayllari** ham faqat `owner` uchun ochiq.
 
 > **Parol qayerda saqlanadi?** `.env` dagi `ADMIN_PASSWORD_HASH` faqat **eng birinchi**
 > ishga tushishda o'qiladi — keyin parol bazada saqlanadi. Shuning uchun parolni
@@ -261,17 +278,24 @@ Tizimda amalga oshirilgan himoya choralari:
 4. Xodim ishdan ketsa — uning loginini «O'chirish» tugmasi bilan bloklang.
 5. `npm run backup` ni kunlik `cron`ga qo'ying va nusxani boshqa joyda saqlang.
 6. Imkon bo'lsa, nginx'da panelni universitet tarmog'i IP'lari bilan cheklang
-   (namuna `deploy/nginx.conf` ichida).
-7. `npm audit` va `npm update` ni vaqti-vaqti bilan bajaring.
+   (namuna `deploy/nginx-limits.conf` ichida) va `ufw` bilan 8080-portni yoping.
+7. **Faqat bitta nusxa (instans)** ishlatilsin: baza SQLite, albom buferi esa
+   xotirada — ikki jarayon bir vaqtda ishlasa, fayllar va chegaralar chalkashadi.
+   (Yuklama oshsa, oldin bitta serverni kuchaytiring.)
+8. `npm audit` va `npm update` ni vaqti-vaqti bilan bajaring.
 
 ---
 
 ## 7. Zaxira va tiklash
 
 ```bash
-npm run backup                  # data/backups/murojaat-2026-10-19-18-30.db
+npm run backup                  # data/backups/murojaat-2026-10-20-02-00.db
+
+# systemd bilan ishlaganda (baza /var/lib/murojaat-bot da):
+sudo -u murojaat DATA_DIR=/var/lib/murojaat-bot npm run backup
+
 # cron: har kuni 02:00 da
-0 2 * * * cd /opt/murojaat-bot/murojaat-bot && /usr/bin/npm run backup >> /var/log/murojaat-backup.log 2>&1
+0 2 * * * cd /opt/murojaat-bot/murojaat-bot && DATA_DIR=/var/lib/murojaat-bot /usr/bin/npm run backup >> /var/log/murojaat-backup.log 2>&1
 ```
 
 **Tiklash.** Baza WAL rejimida ishlaydi, shuning uchun `-wal` va `-shm` fayllarini
@@ -280,10 +304,10 @@ yozilib, zaxirani bekor qiladi:
 
 ```bash
 sudo systemctl stop murojaat-bot
-cd /opt/murojaat-bot/murojaat-bot
-sudo -u murojaat rm -f data/murojaat.db data/murojaat.db-wal data/murojaat.db-shm
-sudo -u murojaat cp data/backups/murojaat-2026-10-20-02-00.db data/murojaat.db
-sudo -u murojaat chmod 600 data/murojaat.db
+D=/var/lib/murojaat-bot          # systemd'siz ishlatayotgan bo'lsangiz: D=./data
+sudo -u murojaat rm -f $D/murojaat.db $D/murojaat.db-wal $D/murojaat.db-shm
+sudo -u murojaat cp $D/backups/murojaat-2026-10-20-02-00.db $D/murojaat.db
+sudo -u murojaat chmod 600 $D/murojaat.db
 sudo systemctl start murojaat-bot
 ```
 
@@ -299,7 +323,7 @@ sudo systemctl start murojaat-bot
 | `npm run webhook set\|info\|delete` | webhook boshqaruvi |
 | `npm run backup` | bazaning zaxira nusxasi |
 | `npm run reset-password -- <login> "<parol>"` | parolni unutganda yangilash (sessiyalar bekor qilinadi) |
-| `npm test` | uchdan-uchiga tekshiruv (147 ta test, Telegram'siz) |
+| `npm test` | uchdan-uchiga tekshiruv (158 ta test, Telegram'siz) |
 
 ---
 

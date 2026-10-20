@@ -16,6 +16,11 @@ Group=murojaat
 WorkingDirectory=/opt/murojaat-bot/murojaat-bot
 EnvironmentFile=/opt/murojaat-bot/murojaat-bot/.env
 ExecStart=/usr/bin/node src/index.js
+# Ma'lumotlar /var/lib/murojaat-bot da: papkani systemd o'zi yaratadi va
+# egasini belgilaydi (ProtectSystem=strict bilan ham yoziladigan bo'ladi).
+StateDirectory=murojaat-bot
+StateDirectoryMode=0700
+Environment=DATA_DIR=/var/lib/murojaat-bot
 Restart=always
 RestartSec=5
 StandardOutput=journal
@@ -31,7 +36,6 @@ ProtectHome=true
 ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectControlGroups=true
-ReadWritePaths=/opt/murojaat-bot/murojaat-bot/data
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
 RestrictNamespaces=true
 LockPersonality=true

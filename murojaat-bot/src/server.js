@@ -15,9 +15,14 @@ const db = require('./db');
 const log = require('./logger');
 const { bot, deliverReply, getFilePath, notifyAuthorInProgress, sendDailyDigest } = require('./bot');
 const {
-  verifyPassword, hashPassword, verifyTotp, safeEqual, randomToken, sha256, keyedHash,
+  verifyPassword, hashPassword, verifyPasswordAsync, hashPasswordAsync, verifyTotp,
+  safeEqual, randomToken, sha256, keyedHash,
   generateTotpSecret, RateLimiter, serializeCookie, parseCookies, sanitizeText,
 } = require('./security');
+
+/* "Foydalanuvchi topilmadi" holatida ham bir xil vaqt ketishi uchun soxta hash.
+   Bir marta hisoblanadi — har so'rovda qayta hisoblash serverni sekinlashtiradi. */
+const DUMMY_HASH = hashPassword('dummy-password-for-timing');
 
 const COOKIE_NAME = config.requireHttps ? '__Host-mb_session' : 'mb_session';
 const SESSION_TTL_MS = config.sessionTtlHours * 3600_000;
@@ -204,7 +209,7 @@ function createApp() {
   /* =====================================================================
      KIRISH / CHIQISH
      ===================================================================== */
-  app.post('/api/login', (req, res) => {
+  app.post('/api/login', async (req, res) => {
     const ip = ipHash(req);
     /* Login registrga sezgir emas (COLLATE NOCASE) — qulflash hisoblagichlari
        ham bir xil kalitni ko'rishi uchun kichik harfga keltiramiz (sec-02). */
@@ -215,17 +220,21 @@ function createApp() {
     /* IP va login bo'yicha qulflash (brute-force himoyasi) */
     const windowStart = Date.now() - config.loginWindowMinutes * 60_000;
     const lockedByIp = db.countFailedAttempts(ip, windowStart) >= config.loginMaxAttempts;
-    const lockedByUser = db.countFailedForUser(username, windowStart) >= config.loginMaxAttempts * 2;
+    /* Hisob darajasidagi qulf faqat KO'P TURLI IP'dan hujum bo'lganda ishlaydi —
+       aks holda bitta hujumchi adminni panelga kirита olmaydigan qilib qo'yadi. */
+    const lockedByUser = db.countFailedIpsForUser(username, windowStart) >= 5 &&
+      db.countFailedForUser(username, windowStart) >= config.loginMaxAttempts * 2;
+
     if (!loginLimiter.check('login:' + ip).allowed || lockedByIp || lockedByUser) {
-      db.recordLoginAttempt(ip, username, false);
-      log.warn('kirish qulflandi', { ip_hash: ip, username });
+      /* DIQQAT: qulflangan so'rovni yangi "xato urinish" sifatida YOZMAYMIZ —
+         aks holda hujumchi oynani cheksiz uzaytirib, qulfni abadiy ushlab turadi. */
+      log.warn('kirish qulflandi', { ip_hash: ip, username, by: lockedByIp ? 'ip' : 'hisob' });
       return fail(res, 429, 'locked', `Juda ko'p urinish. ${config.loginWindowMinutes} daqiqadan keyin qayta urinib ko'ring.`);
     }
 
     const admin = db.getAdminByUsername(username);
-    const okPassword = admin ? verifyPassword(password, admin.password_hash)
-      /* Foydalanuvchi topilmasa ham bir xil vaqt ketsin (user enumeration'ga qarshi) */
-      : verifyPassword(password, hashPassword('dummy-password-for-timing'));
+    /* Asinxron: scrypt hisoblanayotganda server boshqa so'rovlarga javob bera oladi */
+    const okPassword = await verifyPasswordAsync(password, admin ? admin.password_hash : DUMMY_HASH);
 
     if (!admin || admin.is_disabled || !okPassword) {
       db.recordLoginAttempt(ip, username, false);
@@ -272,18 +281,18 @@ function createApp() {
     });
   });
 
-  app.post('/api/password', requireAuth, requireCsrf, (req, res) => {
+  app.post('/api/password', requireAuth, requireCsrf, async (req, res) => {
     const current = String(req.body?.current || '');
     const next = String(req.body?.next || '');
     const admin = db.getAdmin(req.session.admin_id);
-    if (!verifyPassword(current, admin.password_hash)) {
+    if (!await verifyPasswordAsync(current, admin.password_hash)) {
       db.audit(req.actor, 'password_change_failed', null, null, ipHash(req));
       return fail(res, 401, 'bad_credentials', 'Hozirgi parol xato.');
     }
     if (next.length < 12) return fail(res, 400, 'weak_password', 'Yangi parol kamida 12 belgi bo\'lishi kerak.');
     if (next === current) return fail(res, 400, 'same_password', 'Yangi parol eskisidan farq qilishi kerak.');
 
-    db.setAdminPassword(admin.id, next);
+    db.setAdminPassword(admin.id, await hashPasswordAsync(next));
     db.revokeAdminSessions(admin.id);          // barcha qurilmalardan chiqarish
     db.audit(req.actor, 'password_changed', null, null, ipHash(req));
     clearSessionCookie(res);
@@ -404,6 +413,11 @@ function createApp() {
   app.get('/api/attachments/:id', requireAuth, async (req, res) => {
     const attachment = db.getAttachment(toInt(req.params.id, -1));
     if (!attachment) return fail(res, 404, 'not_found', 'Fayl topilmadi.');
+    /* Arxivlangan murojaatning fayli ham faqat owner uchun ochiq bo'lishi kerak */
+    const parent = db.getAppeal(attachment.appeal_id);
+    if (!parent || (parent.deleted_at && req.session.role !== 'owner')) {
+      return fail(res, 404, 'not_found', 'Fayl topilmadi.');
+    }
     try {
       const filePath = await getFilePath(attachment.file_id);
       const url = `${config.botApiRoot}/file/bot${config.botToken}/${filePath}`;
@@ -486,9 +500,9 @@ function createApp() {
      ADMINLAR (faqat egasi) VA AUDIT
      ===================================================================== */
   /* ---- Ikki qadamli kirish (TOTP): o'z hisobing uchun ---- */
-  app.post('/api/totp/init', requireAuth, requireCsrf, (req, res) => {
+  app.post('/api/totp/init', requireAuth, requireCsrf, async (req, res) => {
     const admin = db.getAdmin(req.session.admin_id);
-    if (!verifyPassword(String(req.body?.password || ''), admin.password_hash)) {
+    if (!await verifyPasswordAsync(String(req.body?.password || ''), admin.password_hash)) {
       return fail(res, 401, 'bad_credentials', 'Parol xato.');
     }
     const secret = generateTotpSecret();
@@ -511,9 +525,9 @@ function createApp() {
     res.json({ ok: true, message: 'Ikki qadamli kirish yoqildi.' });
   });
 
-  app.post('/api/totp/disable', requireAuth, requireCsrf, (req, res) => {
+  app.post('/api/totp/disable', requireAuth, requireCsrf, async (req, res) => {
     const admin = db.getAdmin(req.session.admin_id);
-    if (!verifyPassword(String(req.body?.password || ''), admin.password_hash)) {
+    if (!await verifyPasswordAsync(String(req.body?.password || ''), admin.password_hash)) {
       return fail(res, 401, 'bad_credentials', 'Parol xato.');
     }
     db.setAdminTotp(req.session.admin_id, null);
@@ -535,14 +549,14 @@ function createApp() {
     })) });
   });
 
-  app.post('/api/admins', requireAuth, requireCsrf, requireOwner, (req, res) => {
+  app.post('/api/admins', requireAuth, requireCsrf, requireOwner, async (req, res) => {
     const username = sanitizeText(req.body?.username, 32).toLowerCase();
     const password = String(req.body?.password || '');
     const role = req.body?.role === 'owner' ? 'owner' : 'operator';
     if (!/^[a-z0-9._-]{3,32}$/.test(username)) return fail(res, 400, 'bad_username', 'Login: 3–32 belgi, faqat a-z 0-9 . _ -');
     if (password.length < 12) return fail(res, 400, 'weak_password', 'Parol kamida 12 belgi bo\'lishi kerak.');
     if (db.getAdminByUsername(username)) return fail(res, 409, 'exists', 'Bu login allaqachon mavjud.');
-    const created = db.createAdmin({ username, password, role });
+    const created = db.createAdmin({ username, passwordHash: await hashPasswordAsync(password), role });
     db.audit(req.actor, 'admin_created', username, role, ipHash(req));
     res.json({ ok: true, id: created.id });
   });

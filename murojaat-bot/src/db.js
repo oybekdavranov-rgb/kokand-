@@ -492,13 +492,17 @@ const listAdmins = () => stmtListAdmins.all();
 const stmtCreateAdmin = db.prepare(`
   INSERT INTO admins (username, password_hash, role, created_at, password_changed_at)
   VALUES (?, ?, ?, ?, ?)`);
-function createAdmin({ username, password, role = 'operator' }) {
-  const info = stmtCreateAdmin.run(String(username).trim(), hashPassword(password), role === 'owner' ? 'owner' : 'operator', now(), now());
+/** passwordHash — TAYYOR hash (so'rov ichida asinxron hisoblanadi) yoki password — ochiq parol (skriptlar uchun) */
+function createAdmin({ username, password, passwordHash, role = 'operator' }) {
+  const hash = passwordHash || hashPassword(password);
+  const info = stmtCreateAdmin.run(String(username).trim(), hash, role === 'owner' ? 'owner' : 'operator', now(), now());
   return getAdmin(Number(info.lastInsertRowid));
 }
 
 const stmtSetAdminPassword = db.prepare('UPDATE admins SET password_hash = ?, password_changed_at = ? WHERE id = ?');
-const setAdminPassword = (id, password) => stmtSetAdminPassword.run(hashPassword(password), now(), id);
+/** value — tayyor hash ("scrypt." bilan boshlanadi) yoki ochiq parol */
+const setAdminPassword = (id, value) =>
+  stmtSetAdminPassword.run(String(value).startsWith('scrypt.') ? value : hashPassword(value), now(), id);
 
 const stmtSetAdminDisabled = db.prepare('UPDATE admins SET is_disabled = ? WHERE id = ?');
 const setAdminDisabled = (id, disabled) => stmtSetAdminDisabled.run(disabled ? 1 : 0, id);
@@ -571,8 +575,14 @@ const recordLoginAttempt = (ipHash, username, ok) => stmtLoginAttempt.run(now(),
 const stmtFailedAttempts = db.prepare('SELECT COUNT(*) AS n FROM login_attempts WHERE ip_hash = ? AND ok = 0 AND at > ?');
 const countFailedAttempts = (ipHash, sinceMs) => stmtFailedAttempts.get(ipHash, sinceMs).n;
 
-const stmtFailedForUser = db.prepare('SELECT COUNT(*) AS n FROM login_attempts WHERE username = ? AND ok = 0 AND at > ?');
+const stmtFailedForUser = db.prepare('SELECT COUNT(*) AS n FROM login_attempts WHERE username = ? COLLATE NOCASE AND ok = 0 AND at > ?');
 const countFailedForUser = (username, sinceMs) => stmtFailedForUser.get(String(username || '').slice(0, 64), sinceMs).n;
+
+/* Hisob darajasidagi qulf FAQAT turli IP'lardan kelgan hujumda ishlaydi:
+   bitta IP cheksiz urinib, haqiqiy adminni panelдан uzib qo'ya olmasin. */
+const stmtFailedIpsForUser = db.prepare(
+  'SELECT COUNT(DISTINCT ip_hash) AS n FROM login_attempts WHERE username = ? COLLATE NOCASE AND ok = 0 AND at > ?');
+const countFailedIpsForUser = (username, sinceMs) => stmtFailedIpsForUser.get(String(username || '').slice(0, 64), sinceMs).n;
 
 const stmtPurgeAttempts = db.prepare('DELETE FROM login_attempts WHERE at < ?');
 const stmtPurgeAudit = db.prepare('DELETE FROM audit_log WHERE at < ?');
@@ -598,6 +608,6 @@ module.exports = {
   getAdminByUsername, getAdmin, listAdmins, createAdmin, setAdminPassword, setAdminDisabled,
   setAdminTotp, touchAdminLogin, deleteAdmin, countAdmins, ensureOwner,
   createSession, getSession, touchSession, revokeSession, revokeAdminSessions, purgeSessions,
-  audit, listAudit, recordLoginAttempt, countFailedAttempts, countFailedForUser, purgeOld,
+  audit, listAudit, recordLoginAttempt, countFailedAttempts, countFailedForUser, countFailedIpsForUser, purgeOld,
   close,
 };

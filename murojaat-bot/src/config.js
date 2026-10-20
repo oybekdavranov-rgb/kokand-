@@ -37,12 +37,18 @@ const str = (key, def = '') => (process.env[key] === undefined || process.env[ke
 /* Sonli sozlamalar: noto'g'ri yoki chegaradan tashqari qiymat JIMGINA
    sukutga tushmaydi — ro'yxatga olinadi va ishga tushishni to'xtatadi. */
 const numberIssues = [];
-const num = (key, def, { min = -Infinity, max = Infinity } = {}) => {
+const num = (key, def, { min = -Infinity, max = Infinity, int = true } = {}) => {
   const raw = process.env[key];
   if (raw === undefined || raw === '') return def;
   const n = Number(raw);
   if (!Number.isFinite(n)) {
     numberIssues.push(`${key}="${raw}" son emas (kutilgan: ${min}…${max}).`);
+    return def;
+  }
+  /* Kasrli qiymat jimgina noto'g'ri ishlashga olib keladi
+     (masalan DIGEST_HOUR=9.5 — kunlik xulosa hech qachon yuborilmaydi) */
+  if (int && !Number.isInteger(n)) {
+    numberIssues.push(`${key}=${raw} butun son bo'lishi kerak.`);
     return def;
   }
   if (n < min || n > max) {
@@ -116,7 +122,7 @@ const config = {
   /* --- Nazorat: javobsiz qolgan murojaatlar va kunlik xulosa --- */
   slaHours: num('SLA_HOURS', 48, { min: 1, max: 8760 }),                       // shu muddatdan oshsa "kechikkan"
   digestHour: num('DIGEST_HOUR', 9, { min: 0, max: 23 }),                    // kunlik xulosa soati (mahalliy vaqt)
-  tzOffsetHours: num('TZ_OFFSET_HOURS', 5, { min: -12, max: 14 }),             // O'zbekiston: UTC+5
+  tzOffsetHours: num('TZ_OFFSET_HOURS', 5, { min: -12, max: 14, int: false }),             // O'zbekiston: UTC+5
   notifyUserOnProgress: bool('NOTIFY_USER_ON_PROGRESS', true),
 
   /* --- Ma'lumotlar --- */
