@@ -106,7 +106,7 @@ async function snapshot(reason = 'interval') {
   const store = getAdapter();
   if (!store || busy) return { saved: false, reason: store ? 'band' : 'o\'chirilgan' };
 
-  const db = require('./db');
+  const db = require('./store');
   let version = 0;
   try { version = db.dataVersion(); } catch { /* baza yopilgan bo'lishi mumkin */ }
   if (reason === 'interval' && version === lastVersion) return { saved: false, reason: 'o\'zgarish yo\'q' };

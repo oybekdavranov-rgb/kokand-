@@ -1,217 +1,152 @@
 # Replit'da ishga tushirish va nashr qilish
 
-Bu qo'llanma dekanat xodimi uchun — **kodni bilish shart emas**, hamma narsa
-brauzerdan bajariladi. Har bir qadamda nima va nega qilinayotgani yozilgan.
+Dekanat xodimi uchun qadamma-qadam qo'llanma — **kod bilish shart emas**.
 
-> Bot Replit muhitini **o'zi taniydi**: manzil, port, HTTPS va proxy sozlamalari
-> avtomatik to'g'rilanadi. Sizdan faqat maxfiy kalitlar va bitta "App Storage"
-> bo'limi talab qilinadi.
+> Bot Replit muhitini **o'zi taniydi** (manzil, port, domen, rejim).
+> Sizdan faqat ikkita qiymat talab qilinadi: bot tokeni va chat ID.
 
 ---
 
-## ⚠️ Avval bilish kerak bo'lgan bitta muhim narsa
+## ⚠️ Bitta muhim narsa
 
 Replit'da **nashr qilingan ilovaning fayl tizimi saqlanmaydi** — har "Publish"da
 u toza holatga qaytadi ([Replit hujjati](https://docs.replit.com/cloud-services/deployments/troubleshooting):
 *"the file system in published apps is not persistent and resets every time you publish"*).
 
-Ya'ni **hech narsa qilinmasa, har yangilanishda barcha murojaatlar yo'qoladi.**
+Bu botda bunga uch qavat javob bor:
 
-Shuning uchun bot ikki qavat himoya bilan keladi:
+| Himoya | Nima qiladi |
+|---|---|
+| **Telegram chati** | murojaatlar va javoblar dekanat chatida qoladi — bu asosiy arxiv |
+| **App Storage** | baza nusxasi Replit'ning tashqi xotirasida; ishga tushishda **avtomatik tiklanadi** |
+| **Kunlik zaxira** | baza `.db.gz` fayl bo'lib dekanat chatiga yuboriladi |
 
-| Himoya | Nima qiladi | Qachon |
-|---|---|---|
-| **App Storage** | bazaning nusxasini Replit'ning tashqi xotirasida saqlaydi va **ishga tushishda avtomatik tiklaydi** | har 2 daqiqada (o'zgarish bo'lsa) va to'xtashdan oldin |
-| **Telegram zaxirasi** | baza faylini dekanat chatiga yuboradi — tashqi, mustaqil nusxa | kuniga bir marta, to'xtashdan oldin va `/zaxira` buyrug'i bilan |
-
-**3-qadamni (App Storage) o'tkazib yubormang** — aks holda ma'lumot himoyalanmaydi.
+Ya'ni eng yomon holatda ham murojaatlar yo'qolmaydi — ular Telegram'da turadi.
 
 ---
 
 ## 1. Loyihani Replit'ga olish
 
 1. [replit.com](https://replit.com) ga kiring.
-2. **Create App** → **Import from GitHub** → repozitoriya havolasini qo'ying.
+2. **Create App** → **Import from GitHub** → repozitoriya havolasi.
    Bir bosishli yo'l: `https://replit.com/github/<foydalanuvchi>/<repo>`
-3. Arxivdan yuklayotgan bo'lsangiz: **Upload folder** → `murojaat-bot` papkasi.
+3. Arxivdan yuklasangiz: **Upload folder** → `murojaat-bot` papkasi.
 
-Ikkala holatda ham sozlash shart emas: repozitoriya ildizidagi `.replit` fayli
-Replit'ni `murojaat-bot/` papkasiga yo'naltiradi va Node 22 ni tanlaydi.
+Repozitoriya ildizidagi `.replit` fayli Replit'ni kerakli papkaga yo'naltiradi
+va Node 22 ni tanlaydi — qo'lda sozlash shart emas.
 
-> Quyidagi buyruqlarni **Shell**da bajarganda, avval kerakli papkaga o'ting:
-> ```bash
-> cd murojaat-bot
-> ```
-> (Agar faqat `murojaat-bot` papkasini yuklagan bo'lsangiz, bu shart emas.)
+> Shell'dagi buyruqlardan oldin kerakli papkaga o'ting: `cd murojaat-bot`
+> (faqat `murojaat-bot` papkasini yuklagan bo'lsangiz — shart emas).
 
 ---
 
-## 2. Maxfiy kalitlarni yaratish
+## 2. Ikkita kerakli qiymatni tayyorlash
 
-Pastdagi **Shell** oynasiga yozing:
+**Bot tokeni:** Telegram'da [@BotFather](https://t.me/BotFather) → `/newbot` →
+bot nomini va foydalanuvchi nomini tanlaysiz → u token beradi.
 
-```bash
-npm install
-npm i --no-save @replit/object-storage
-npm run replit-secrets -- "OzingizTanlaganParol2026"
-```
+**Chat ID** (murojaatlar qayerga kelishi):
+- Shaxsiy chat: [@userinfobot](https://t.me/userinfobot) ga `/start` yozing — `Id: 123456789`.
+- Dekanat guruhi: botni guruhga qo'shing, **admin** qiling, guruhga biror xabar
+  yozing va ID'ni [@userinfobot](https://t.me/userinfobot) orqali aniqlang
+  (guruh ID'si `-100...` bilan boshlanadi).
 
-> Ikkinchi qator — ma'lumotni saqlash moduli. U faqat Replit'da kerak, shuning
-> uchun loyihaning asosiy bog'liqliklariga kiritilmagan (boshqa serverlarda
-> keraksiz va ortiqcha zaiflik olib keladi). Nashr qilganda Replit uni
-> `.replit` faylidagi ko'rsatma bo'yicha o'zi o'rnatadi.
+---
 
-Ekranda tayyor ro'yxat chiqadi. Chap paneldagi **🔒 Secrets** (Maxfiy ma'lumotlar)
-bo'limini oching va quyidagilarni birma-bir qo'shing:
+## 3. Secrets (maxfiy qiymatlar)
+
+Chap paneldagi **🔒 Secrets** bo'limini oching va qo'shing:
 
 | Kalit | Qiymat |
 |---|---|
-| `BOT_TOKEN` | [@BotFather](https://t.me/BotFather) bergan token |
-| `SESSION_SECRET` | skript chiqargan qiymat |
-| `ADMIN_USERNAME` | masalan `dekanat` |
-| `ADMIN_PASSWORD_HASH` | skript chiqargan uzun qator (`scrypt.` bilan boshlanadi) |
-| `NOTIFY_CHAT_IDS` | dekan yoki qabulxona Telegram chat ID'si |
+| `BOT_TOKEN` | @BotFather bergan token |
+| `ADMIN_CHAT_IDS` | yuqorida aniqlagan chat ID |
+| `ADMIN_USER_IDS` | *(guruh ishlatsangiz)* javob bera oladigan xodimlar ID'si |
 
-**Parolning o'zini Secrets'ga yozmang** — faqat hashini. Parolni xavfsiz joyda saqlang.
-
-Chat ID ni bilish: Telegram'da [@userinfobot](https://t.me/userinfobot) ga `/start` yozing.
-Guruh ID'si manfiy bo'ladi (`-100...`).
-
-> `WEBHOOK_SECRET` va `PUBLIC_URL` kerak emas — bot Replit'da **polling** rejimida
-> ishlaydi (soddaroq va ishonchliroq).
+Boshqa hech narsa shart emas — qolgan sozlamalar standart qiymatda ishlaydi.
 
 ---
 
-## 3. App Storage (ma'lumotni saqlash) — MAJBURIY
+## 4. App Storage (ma'lumotni saqlash)
 
-1. Chap paneldagi **App Storage** (ba'zi versiyalarda **Object Storage**) bo'limini oching.
-2. **Create bucket** (yoki **Get started**) tugmasini bosing — bitta bucket yetarli,
-   nomini o'zgartirish shart emas.
-3. 2-qadamdagi `npm i --no-save @replit/object-storage` buyrug'i bajarilganiga
-   ishonch hosil qiling (busiz bot bucket'ni ko'rmaydi).
+1. Shell'da: `npm install && npm i --no-save @replit/object-storage`
+2. Chap paneldagi **App Storage** (yoki **Object Storage**) → **Create bucket**.
 
-Tamom. Bot buni o'zi topadi: ishga tushganda logda shunday yoziladi:
-
-```
-doimiy saqlash: Replit App Storage (baza joyida)
-```
-
-Agar bucket yaratilmagan bo'lsa, logda qizil ogohlantirish chiqadi:
-`App Storage ulanmadi — MA'LUMOT HIMOYALANMAGAN`.
+Logda `doimiy saqlash: Replit App Storage` degan satr chiqsa — tayyor.
+Chiqmasa, `⚠️ doimiy saqlash YO'Q` deb yoziladi (bu holda ham murojaatlar
+Telegram chatida saqlanib qoladi, faqat raqamlar tarixi yangilanishda yo'qoladi).
 
 ---
 
-## 4. Sinab ko'rish (Workspace)
+## 5. Sinab ko'rish
 
-**Run** tugmasini bosing. Logda shunga o'xshash satrlar bo'lishi kerak:
+**Run** tugmasini bosing. Logda:
 
 ```
 bot "polling" rejimida ishga tushdi: @sizning_botingiz
-admin panel: https://<app>.<foydalanuvchi>.replit.dev
+murojaatlar shu chatlarga boradi: 123456789
 rejim: production · muhit: Replit (doimiy saqlash yoqilgan)
 ```
 
 Tekshiring:
-- Telegram'da botingizga `/start` yozing → salomlashish xabari kelishi kerak.
-- Murojaat matnini yozing → raqam (`MR-2026-0001`) qaytishi kerak.
-- Logdagi havolani oching → login va parolingiz bilan panelga kiring.
+1. Botga `/start` yozing → salomlashish keladi.
+2. Murojaat matnini yozing → raqam (`MR-2026-0001`) qaytadi.
+3. Dekanat chatiga murojaat kartasi tushadi.
+4. O'sha kartaga **«reply»** qilib javob yozing → javob fuqaroga boradi.
 
 ---
 
-## 5. Nashr qilish (Publish)
+## 6. Nashr qilish (Publish)
 
-1. Yuqoridagi **Publish** (yoki **Deploy**) tugmasini bosing.
-2. **Deployment turi: Reserved VM** ni tanlang.
-   - *Autoscale tanlamang:* u 15 daqiqa harakatsizlikdan keyin uxlaydi —
-     polling uziladi, kunlik xulosa va "kechikkan murojaat" nazorati ishlamaydi.
-3. **Machine: 0.5 vCPU / 2 GiB** (eng kichik tavsiya etilgani — `better-sqlite3`
-   o'rnatilishi uchun yetarli xotira kerak).
-4. **Mode: Web server** (Background worker EMAS — panel port tinglaydi).
-5. Secrets: nashr uchun maxfiy qiymatlar alohida saqlanadi. Publish oynasidagi
-   **Secrets** bo'limida ularning hammasi borligiga ishonch hosil qiling.
-6. **Publish** tugmasini bosing va qurish (build) logini kuzating.
+1. **Publish** tugmasi.
+2. **Reserved VM** ni tanlang.
+   *Autoscale tanlamang:* u 15 daqiqa harakatsizlikdan keyin uxlaydi —
+   polling uziladi, kunlik xulosa ham ishlamaydi.
+3. **0.5 vCPU / 2 GiB**, rejim: **Web server** (holat tekshiruvi port tinglaydi).
+4. Publish oynasidagi **Secrets** ro'yxatida qiymatlar borligini tekshiring —
+   nashr uchun ular alohida saqlanadi.
+5. **Publish**.
 
-Nashrdan keyin ilova `https://<nom>.replit.app` manzilida ochiladi.
+Nashrdan keyin: `https://<nom>.replit.app/healthz` → `{"ok":true,...}`.
+Bu manzilda boshqa hech narsa yo'q — botda web-panel yo'q.
 
-> **Eslatma:** Secrets'ni keyinchalik o'zgartirsangiz, yangi qiymat **qayta nashr
-> qilingandan keyin** kuchga kiradi.
-
----
-
-## 6. Nashrdan keyin tekshirish ro'yxati
-
-| Tekshiruv | Qanday | Kutilgan natija |
-|---|---|---|
-| Ilova sog'ligi | `https://<nom>.replit.app/healthz` ni oching | `{"ok":true,...,"storage":true}` |
-| Panel | `https://<nom>.replit.app` | kirish oynasi |
-| Bot | Telegram'da `/start` | salomlashish xabari |
-| Murojaat | botga matn yozing | raqam qaytadi, panelda ko'rinadi |
-| Saqlash | logda `doimiy saqlash:` qatori | `Replit App Storage` |
-| Zaxira | dekanat chatida `/zaxira` | `.db.gz` fayli keladi |
-
-`"storage": false` bo'lsa — 3-qadamga qayting (bucket yaratilmagan).
+> Secrets'ni keyin o'zgartirsangiz, **qayta nashr qiling** — yangi qiymatlar
+> shundan keyin kuchga kiradi.
 
 ---
 
 ## 7. Zaxira va tiklash
 
-**Avtomatik:** bot har kuni dekanat chatiga `murojaat-....db.gz` faylini yuboradi.
-Bu fayllarni **o'chirmang** — ular sizning mustaqil zaxirangiz.
+Bot har kuni dekanat chatiga `murojaat-....db.gz` yuboradi (`/zaxira` bilan
+istalgan vaqtda ham). Tiklash kerak bo'lsa:
 
-**Qo'lda:** dekanat chatida `/zaxira` deb yozing — hoziroq yuboradi.
-
-**Tiklash** (masalan baza buzilsa yoki eski holatga qaytish kerak bo'lsa):
-
-1. Telegram'dan `.db.gz` faylini kompyuterga yuklab oling.
-2. Replit fayl ro'yxatiga uni yuklang (drag-and-drop).
-3. Shell'da:
-   ```bash
-   npm run restore -- murojaat-2026-10-21-09-00.db.gz
-   ```
-4. **Stop → Run** (yoki qayta nashr) qiling.
-
-Eski baza o'chirilmaydi — `murojaat.db.eski-...` nomi bilan saqlanib qoladi.
+1. Faylni Telegram'dan yuklab oling va Replit fayl ro'yxatiga tashlang.
+2. Shell: `npm run restore -- murojaat-2026-10-21-09-00.db.gz`
+3. **Stop → Run** (yoki qayta nashr).
 
 ---
 
-## 8. Kundalik ishlatish
+## 8. Muammolar
 
-| Kerak bo'lsa | Shell'da |
+| Belgi | Yechim |
 |---|---|
-| Parolni almashtirish | `npm run reset-password -- dekanat "YangiParol2026"` |
-| Qo'lda zaxira | `npm run backup` |
-| Zaxiradan tiklash | `npm run restore -- <fayl>` |
-| Tizimni tekshirish | `npm test` |
-
-Telegram'dagi dekanat chatida: `/statistika`, `/zaxira`,
-`/javob MR-2026-0007 javob matni`.
-
----
-
-## 9. Muammolar
-
-| Belgi | Sabab va yechim |
-|---|---|
-| `⛔️ Sozlamalarda xato` | logda qaysi kalit yetishmayotgani yozilgan — Secrets'ga qo'shing va qayta ishga tushiring |
-| Bot javob bermayapti | `BOT_TOKEN` noto'g'ri (log: `401 Unauthorized`) yoki Secrets o'zgartirilib qayta nashr qilinmagan |
-| Panel ochilmayapti, `https_required` | Secrets'ga qo'lda `TRUST_PROXY` yoki `HOST` yozgan bo'lsangiz — ularni **o'chiring**, bot o'zi to'g'ri sozlaydi |
-| `better-sqlite3` xatosi | Shell'da: `npm rebuild better-sqlite3 --build-from-source`. Yordam bermasa `rm -rf node_modules && npm install` |
-| `storage: false` | App Storage bucket yaratilmagan (3-qadam), yoki modul o'rnatilmagan: `npm i --no-save @replit/object-storage` |
-| Logda `App Storage ulanmadi` | yuqoridagi buyruqni bajaring va qayta ishga tushiring |
-| Nashrdan keyin murojaatlar yo'q | App Storage'siz nashr qilingan. Telegram'dagi oxirgi `.db.gz` dan tiklang (7-qadam) |
-| Ilova uxlab qoladi | Autoscale tanlangan — Reserved VM ga o'tkazing |
+| `⛔️ Sozlamalarda xato` | logda qaysi Secret yetishmayotgani yozilgan |
+| Bot javob bermayapti | `BOT_TOKEN` xato (log: `401 Unauthorized`), yoki Secrets o'zgartirilib qayta nashr qilinmagan |
+| Murojaat dekanatga kelmayapti | `ADMIN_CHAT_IDS` noto'g'ri; guruh bo'lsa bot guruhga qo'shilganmi va admin qilinganmi |
+| Guruhda javob ishlamaydi | botga guruhda **admin** huquqini bering |
+| «Sizda huquq yo'q» | `ADMIN_USER_IDS` ga o'z ID'ingizni qo'shing (yoki bu kalitni umuman olib tashlang) |
+| `storage: false` | 4-qadam bajarilmagan |
+| `better-sqlite3` xatosi | Shell: `npm rebuild better-sqlite3 --build-from-source` |
+| Ilova uxlab qoladi | Autoscale tanlangan — Reserved VM ga o'ting |
 
 ---
 
-## 10. Narx va cheklovlar — halol gap
+## 9. Narx va cheklovlar — halol gap
 
-- **Reserved VM** pullik: taxminan **$15–20/oy** (Replit Core rejasi ichidagi kredit
-  bilan ko'pincha qoplanadi). Aniq narxni Replit sahifasida tekshiring — o'zgarib turadi.
-- **Bepul tarif bu bot uchun yaramaydi**: ilova uxlaydi, murojaatlar qabul qilinmaydi.
-- **Replit hisobi yoki to'lov to'xtasa** — bot ham, ma'lumot ham to'xtaydi.
-  Telegram'dagi zaxira fayllari esa qoladi — shuning uchun ularni saqlang.
-- Ko'p murojaat kutilsa yoki ma'lumot juda muhim bo'lsa, universitetning
-  **o'z serveri** (VPS + nginx) ishonchliroq va arzonroq — qo'llanmasi `README.md` da.
-- Replit'ning interfeysi tez-tez o'zgaradi. Tugmalar nomi boshqacha bo'lsa,
-  mazmuniga qarang: *Import*, *Secrets*, *App Storage*, *Publish/Deploy*,
-  *Reserved VM*, *Web server*.
+- **Reserved VM** pullik: taxminan **$15–20/oy** (Replit Core rejasidagi kredit
+  ko'pincha qoplaydi). Aniq narx Replit sahifasida — o'zgarib turadi.
+- **Bepul tarif bu bot uchun yaramaydi**: ilova uxlaydi va murojaat qabul qilinmaydi.
+- Replit hisobi yoki to'lov to'xtasa, bot ham to'xtaydi — lekin murojaatlar
+  dekanat chatida qoladi.
+- Uzoq muddatga universitetning o'z serveri (VPS) arzonroq va ishonchliroq:
+  polling rejimida domen ham, nginx ham kerak emas — `README.md`, 4-A bo'limi.

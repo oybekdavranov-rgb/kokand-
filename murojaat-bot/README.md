@@ -1,335 +1,197 @@
 # Murojaat boti — Ta'lim fakulteti dekanati
 
 Qo'qon universiteti **Ta'lim fakulteti** dekani **Xursanaliyev Boburmirzo Farhod o'g'li**
-qabulxonasi uchun Telegram bot va yopiq admin panel.
+qabulxonasi uchun Telegram bot.
 
-> **Asosiy g'oya:** murojaatlar **kategoriyalarga bo'linmaydi.** Talaba, ota-ona yoki xodim
-> botga shunchaki o'z gapini yozadi — tizim uni raqamlab, dekanat paneliga tushiradi.
+> **Asosiy g'oya:** fuqaro botga oddiy xabar yozadi — bot murojaatni
+> **to'g'ridan-to'g'ri dekanatning Telegram chatiga** yuboradi. Dekan o'sha xabarga
+> «reply» qilib javob yozadi — javob fuqaroga yetib boradi.
+> **Web-panel, login va parol yo'q** — hamma ish Telegram ichida.
 
 ```
-  Foydalanuvchi                 Bot (Telegram)              Dekanat
-  ─────────────                 ──────────────              ───────
-  xabar yozadi      ──────▶   matn + fayllar qabul    ──▶   🔔 Telegram xabarnomasi
-                              MR-2026-0007 raqami            🖥 admin panel: ro'yxat,
-  javobni oladi     ◀──────   javob yuboriladi        ◀──   qidiruv, javob, holat
+  Fuqaro                      Bot                      Dekanat (Telegram)
+  ──────                      ───                      ──────────────────
+  xabar yozadi   ────────▶  raqam beradi   ────────▶  🆕 Murojaat MR-2026-0007
+                            MR-2026-0007              👤 Ali · @ali · +998...
+                                                      [⏳ Ko'rilmoqda] [🔒 Yopish]
+  javobni oladi  ◀────────  javobni        ◀────────  xabarga «reply» qilib
+                            yetkazadi                 javob yoziladi
 ```
 
-Barcha ma'lumot **o'z serveringizda** (SQLite) saqlanadi — tashqi xizmatlarga chiqmaydi.
+Murojaatlarning o'zi dekanat chatida saqlanib qoladi — qidirish ham, arxiv ham
+Telegram'ning o'zida. Bot esa raqamlash, chegaralar, nazorat va zaxira bilan shug'ullanadi.
 
 ---
 
-> Replit'da ishga tushirmoqchimisiz? → **[REPLIT.md](REPLIT.md)** (qadamma-qadam, o'zbekcha)
-
-## 1. Tez boshlash (5 daqiqa)
+## 1. Tez boshlash
 
 ```bash
-cd murojaat-bot
 npm install
-npm run setup        # kalitlarni yaratadi, parolni hash qiladi, .env yozadi
+cp .env.example .env     # BOT_TOKEN va ADMIN_CHAT_IDS ni to'ldiring
 npm start
 ```
 
-`npm run setup` quyidagilarni so'raydi:
+Kerak bo'ladigan ikki qiymat:
 
-| So'rov | Izoh |
+| Nima | Qayerdan olinadi |
 |---|---|
-| `BOT_TOKEN` | [@BotFather](https://t.me/BotFather) → `/newbot` → bergan token |
-| Admin login | panelga kirish uchun (masalan `dekanat`) |
-| Admin parol | kamida 12 belgi; ochiq saqlanmaydi — darhol hash qilinadi |
-| Chat ID | yangi murojaat xabarnomasi keladigan Telegram chat (ixtiyoriy) |
-| Panel manzili | masalan `https://murojaat.kokanduni.uz` (bo'lmasa — polling rejimi) |
+| `BOT_TOKEN` | [@BotFather](https://t.me/BotFather) → `/newbot` |
+| `ADMIN_CHAT_IDS` | [@userinfobot](https://t.me/userinfobot) ga `/start` — u sizning ID'ingizni beradi |
 
-So'ng panel: **http://localhost:8080**
+Dekanat **guruhi** ishlatilsa: botni guruhga qo'shing, guruh ID'sini (`-100...` bilan
+boshlanadi) yozing va `ADMIN_USER_IDS` ga javob bera oladigan xodimlar ID'sini qo'shing.
 
-### Chat ID'ni qanday bilish mumkin?
-[@userinfobot](https://t.me/userinfobot) ga `/start` yozing — u sizning `id` raqamingizni beradi.
-Guruh uchun: botni guruhga qo'shing, guruhga biror xabar yozing va server logidan chat ID ni ko'ring
-(guruh ID'si manfiy bo'ladi, masalan `-1001234567890`).
+> Replit'da ishga tushirish: **[REPLIT.md](REPLIT.md)**
 
 ---
 
-## 2. Bot nimalarni qiladi
+## 2. Fuqaro uchun
 
-| Foydalanuvchi | Natija |
+| Nima qiladi | Natija |
 |---|---|
-| Istalgan matn yozsa (12+ belgi) | murojaat saqlanadi, `MR-2026-0007` raqami beriladi |
-| Rasm/hujjat/ovozli xabar yuborsa | murojaatga ilova qilib biriktiriladi |
-| `/murojaatlarim` | o'z murojaatlari va ularning holati |
-| `/holat MR-2026-0007` | aniq bir murojaat holati va javobi (faqat o'ziniki) |
-| `/yordam` | qoidalar, cheklovlar, maxfiylik haqida |
-| «📞 Raqamni ulashish» | telefon raqami profilga qo'shiladi (ixtiyoriy) |
+| Istalgan matn yozadi (12+ belgi) | murojaat raqam oladi va dekanatga yuboriladi |
+| Rasm / hujjat / ovozli xabar | murojaatga ilova bo'lib dekanatga boradi |
+| `/murojaatlarim` | o'z murojaatlari va holati |
+| `/holat MR-2026-0007` | aniq murojaat holati va javobi |
+| `/yordam` | qoidalar va maxfiylik haqida |
+| «📞 Raqamni ulashish» | telefon raqami (ixtiyoriy) murojaat kartasida ko'rinadi |
 
-**Spamga qarshi:** soatiga 4 ta, kuniga 12 ta murojaat; xabarlar orasida 20 soniya;
-juda tez yuborilsa foydalanuvchi ogohlantiriladi. Suiiste'mol qilgan foydalanuvchini
-paneldan bloklash mumkin. Chegaralar `.env` orqali o'zgaradi.
+Mavzu yoki bo'lim tanlash **yo'q** — odam nimani xohlasa, shuni yozadi.
 
-**Albom (bir nechta rasm birga)** — Telegram ularni alohida-alohida yuboradi, shuning uchun
-bot albomni bir necha soniya kutib, hammasini **bitta murojaatga** biriktiradi.
-
-**Takrorlanishdan himoya** — Telegram xabarni qayta yuborsa (tarmoq uzilganda), bitta
-xabardan ikkita murojaat yaratilmaydi.
+**Spamga qarshi:** soatiga 4 ta, kuniga 12 ta murojaat; xabarlar orasida 20 soniya.
+Albom (bir nechta rasm) bitta murojaatga yig'iladi. Takroriy yuborilgan xabardan
+ikkinchi murojaat yaratilmaydi.
 
 ---
 
-## 3. Dekanat uchun: admin panel
+## 3. Dekanat uchun
 
-`https://<manzilingiz>` → login va parol bilan kirish.
+Har bir murojaat shu ko'rinishda keladi:
 
-* **Murojaatlar** — qidiruv (matn, raqam, ism, telefon), holat bo'yicha filtr, sahifalash.
-* **Tafsilot** — murojaat matni, muallif ma'lumoti, ilovalar, javoblar tarixi.
-* **Javob berish** — matnni yozib «Javobni yuborish» (yoki `Ctrl+Enter`). Javob bot orqali
-  murojaat egasiga boradi, holat avtomatik «Javob berilgan»ga o'tadi.
-* **Holatlar** — Yangi → Ko'rilmoqda → Javob berilgan → Yopilgan.
-* **CSV** — hisobot yoki zaxira uchun (Excel'da ochiladi).
-* **Ichki izohlar** — xodimlar o'zaro yozishmasi (masalan «o'quv bo'limiga yuborildi»).
-  Murojaat egasi bu izohlarni **ko'rmaydi**.
-* **Kechikkanlar** — belgilangan muddatdan (standart 48 soat) oshgan javobsiz murojaatlar
-  alohida filtr va qizil belgi bilan ajralib turadi.
-* **Sana oralig'i** — oylik hisobot uchun: sanalarni tanlab CSV yuklab olasiz.
-* **Muallif tarixi** — shu odamning oldingi murojaatlari darhol ko'rinadi (takroriy masala).
-* **Rasm ko'rinishi** — ilova qilingan rasmlar panelda darhol ochiladi.
-* **Foydalanuvchilar** — bloklash/blokdan chiqarish.
-* **Adminlar** (faqat `owner`) — xodimlar uchun alohida login yaratish.
-* **Jurnal** (faqat `owner`) — kim, qachon, nima qilgani.
-* **Ikki qadamli kirish (2FA)** — profil menyusidan yoqiladi; Google Authenticator va
-  shunga o'xshash ilovalar bilan ishlaydi.
-* **Arxiv** — o'chirilgan murojaat yo'qolmaydi, `owner` uni «Tiklash» bilan qaytaradi.
+```
+🆕 Murojaat MR-2026-0007
+👤 Ali Valiyev · @ali · +998901234567
+🆔 123456789
+🕒 21.10.2026, 14:30
+📎 2 ta fayl
 
-### Telegram'ning o'zidan boshqarish
-`NOTIFY_CHAT_IDS` da ko'rsatilgan chatga (dekanning **shaxsiy** chati ham, dekanat
-**guruhi** ham bo'lishi mumkin) har bir yangi murojaat xabarnoma bo'lib tushadi. U yerda:
+Dars jadvalida xatolik bor, 3-kurs uchun...
+
+Javob berish: shu xabarga «reply» qilib yozing
+[⏳ Ko'rib chiqilmoqda]  [🔒 Yopish]
+[⛔️ Bloklash]
+```
 
 | Nima qilasiz | Qanday |
 |---|---|
-| Javob berish | xabarnomaga **«reply»** qilib yozasiz |
+| Javob berish | xabarga **«reply»** qilib yozasiz |
 | Javob berish (reply'siz) | `/javob MR-2026-0007 javob matni` |
-| Holatni o'zgartirish | xabarnoma tagidagi tugmalar |
+| Holatni o'zgartirish | xabar tagidagi tugmalar |
+| Suiiste'molchini bloklash | `⛔️ Bloklash` tugmasi yoki `/bloklash MR-2026-0007 sabab` |
 | Qisqa hisobot | `/statistika` |
+| Javobsiz qolganlar | `/kechikkanlar` |
+| Bazaning nusxasi | `/zaxira` |
+| Qo'llanma | `/yordam` |
 
-### Kunlik xulosa
-Har kuni belgilangan soatda (`DIGEST_HOUR`, standart 09:00) dekanat chatiga qisqa
-xulosa keladi: nechta yangi murojaat bor va **qaysi murojaatlar javobsiz qolgan**.
-Shu bilan hech bir murojaat e'tibordan chetda qolmaydi. Paneldagi profil menyusidan
-xulosani istalgan vaqtda qo'lda ham yuborish mumkin.
-
-### Huquqlar
-| Rol | Nima qila oladi |
-|---|---|
-| `owner` | hammasi: o'chirish, adminlar, audit jurnali |
-| `operator` | murojaatlarni ko'rish, javob berish, holat, bloklash |
+**Avtomatik yordamchilar**
+- Murojaat «Ko'rib chiqilmoqda»ga o'tsa, fuqaroga xabar boradi.
+- Har kuni soat 9:00 da kunlik xulosa keladi: nechta yangi murojaat bor va
+  qaysilari **48 soatdan beri javobsiz** qolgan.
+- Har kuni bazaning nusxasi `.db.gz` fayl bo'lib shu chatga yuboriladi.
+- Javob uzun bo'lsa, Telegram chegarasiga qarab bo'laklab yuboriladi.
+- Fuqaro botni bloklagan bo'lsa, "yetkazilmadi" deb aniq aytiladi.
 
 ---
 
-## 4. Ishlab chiqarishga joylash
+## 4. Joylashtirish
 
-### A. VPS + nginx + systemd (tavsiya etiladi)
+### A. VPS (tavsiya etiladi — polling rejimi, nginx kerak emas)
 
 ```bash
-# 1) Foydalanuvchi va kod (home papkasi bo'sh bo'lishi kerak — shuning uchun "-m" YO'Q)
 sudo useradd -r -d /opt/murojaat-bot -s /usr/sbin/nologin murojaat
 sudo mkdir -p /opt/murojaat-bot && sudo chown murojaat:murojaat /opt/murojaat-bot
 sudo -u murojaat git clone <repo> /opt/murojaat-bot
-
-# 2) Bog'liqliklar va sozlash (ilova /opt/murojaat-bot/murojaat-bot ichida)
 cd /opt/murojaat-bot/murojaat-bot
 sudo -u murojaat npm ci --omit=dev
-sudo -u murojaat npm run setup
+sudo -u murojaat cp .env.example .env && sudo -u murojaat nano .env
 sudo chmod 600 .env
 
-# 3) Xizmat (unit faylidagi yo'llar aynan shu joylashuvga mos)
 sudo cp deploy/murojaat-bot.service /etc/systemd/system/
 sudo systemctl daemon-reload && sudo systemctl enable --now murojaat-bot
 sudo journalctl -u murojaat-bot -f
-
-# 4) HTTPS va nginx (ikkita fayl: so'rov chegarasi "http" blokiga qo'yiladi)
-sudo cp deploy/nginx-limits.conf /etc/nginx/conf.d/murojaat-limits.conf
-sudo cp deploy/nginx.conf /etc/nginx/sites-available/murojaat
-sudo ln -s /etc/nginx/sites-available/murojaat /etc/nginx/sites-enabled/
-sudo nginx -t && sudo systemctl reload nginx
-sudo certbot --nginx -d murojaat.example.uz
-
-# 5) Xavfsizlik devori: tashqariga faqat 80/443 ochiq bo'lsin
-sudo ufw allow 80,443/tcp
-sudo ufw deny 8080/tcp          # panel porti faqat nginx orqali
-sudo ufw enable
-
-# 6) Webhook (BOT_MODE=webhook bo'lsa)
-sudo -u murojaat npm run webhook set
 ```
 
-> `deploy/murojaat-bot.service` ichidagi yo'llar `/opt/murojaat-bot/murojaat-bot`
-> ga sozlangan. Boshqa joyga o'rnatsangiz, unit faylidagi `WorkingDirectory` va
-> `EnvironmentFile` ni ham o'zgartiring.
->
-> **Ma'lumotlar qayerda?** systemd rejimida baza `/var/lib/murojaat-bot/` da
-> saqlanadi — papkani systemd o'zi yaratadi va huquqini (0700) beradi, shuning
-> uchun qo'lda `mkdir` qilish shart emas. Zaxira buyruqlarini ham shu
-> foydalanuvchi nomidan bajaring:
-> `sudo -u murojaat DATA_DIR=/var/lib/murojaat-bot npm run backup`
+polling rejimida bot Telegram'ga **o'zi ulanadi** — tashqaridan hech qanday port
+ochish shart emas, domen va sertifikat ham kerak emas.
 
 ### B. Docker
 
 ```bash
-cp .env.example secrets.env   # to'ldiring (yoki: npm run setup && cp .env secrets.env)
+cp .env.example secrets.env   # to'ldiring
 docker compose up -d --build
-docker compose logs -f
 ```
-
-> **Muhim:** Docker uchun sozlamalar `.env` emas, **`secrets.env`** faylida
-> saqlanadi. Compose o'zining `.env` faylidagi `$` belgilarini o'zgaruvchi deb
-> talqin qiladi va parol hashini buzib qo'yadi — shu sababli alohida fayl
-> ishlatiladi. (Hash endi `$` o'rniga `.` bilan yoziladi, bu ham qo'shimcha himoya.)
 
 ### C. Replit
 
-Brauzerdan, server sozlamasdan ishga tushirish mumkin — bot Replit muhitini
-o'zi taniydi va sozlanadi. To'liq qo'llanma: **[REPLIT.md](REPLIT.md)**.
+Brauzerdan, server sozlamasdan: **[REPLIT.md](REPLIT.md)**.
 
-```bash
-npm install
-npm i --no-save @replit/object-storage          # faqat Replit uchun
-npm run replit-secrets -- "ParolingizBuYerda"   # kalitlarni yaratadi
-```
+### D. Webhook rejimi (ixtiyoriy)
 
-> **Muhim:** Replit'da nashr qilingan ilovaning fayl tizimi saqlanmaydi.
-> Shuning uchun **App Storage** bucket'ini yoqish shart (REPLIT.md, 3-qadam) —
-> shunda baza tashqi xotirada saqlanib, qayta ishga tushganda avtomatik tiklanadi.
-> Qo'shimcha himoya sifatida baza har kuni Telegram'ga fayl bo'lib yuboriladi.
-
-### D. Polling yoki webhook?
-
-| | polling | webhook |
-|---|---|---|
-| Domen/HTTPS kerakmi | ❌ yo'q | ✅ ha |
-| Tezlik / resurs | yaxshi | eng yaxshi |
-| Qachon | sinov, ichki tarmoq | doimiy ishlash |
-
-Polling'da ham admin panel ishlaydi — faqat uni tashqaridan ochish uchun HTTPS kerak bo'ladi.
-
-> **Muhim:** `DATA_DIR` doimiy diskda bo'lsin. Render/Railway kabi platformalarda
-> «Persistent Disk» ulab, `DATA_DIR=/data` deб ko'rsating, aks holda har deploy'da
-> murojaatlar o'chib ketadi.
+Agar `BOT_MODE=webhook` tanlasangiz: HTTPS domen, `WEBHOOK_SECRET`, `PUBLIC_URL`
+va oldida nginx kerak (`deploy/nginx.conf`), so'ng `npm run webhook set`.
+Oddiy hollarda **polling yetarli va soddaroq**.
 
 ---
 
-## 5. Sozlamalar (.env)
+## 5. Sozlamalar
 
-Barcha kalitlar va izohlar — `.env.example` faylida. Eng muhimlari:
+Barchasi `.env.example` da izohlari bilan. Eng muhimlari:
 
 | O'zgaruvchi | Vazifasi |
 |---|---|
 | `BOT_TOKEN` | Telegram bot tokeni (maxfiy!) |
+| `ADMIN_CHAT_IDS` | murojaatlar shu chat(lar)ga boradi |
+| `ADMIN_USER_IDS` | kim javob bera oladi (guruh ishlatilsa — to'ldiring) |
 | `BOT_MODE` | `polling` yoki `webhook` |
-| `PUBLIC_URL` | panelning tashqi manzili (webhook uchun majburiy) |
-| `WEBHOOK_SECRET` | Telegram so'rovlarini tasdiqlovchi maxfiy kalit (24+ belgi) |
-| `SESSION_SECRET` | sessiya imzosi uchun kalit (32+ belgi) |
-| `ADMIN_USERNAME` / `ADMIN_PASSWORD_HASH` | panelga kirish (`npm run hash`) |
-| `NOTIFY_CHAT_IDS` | xabarnoma keladigan chatlar |
-| `DATA_DIR` | baza va zaxiralar papkasi |
 | `APPEALS_PER_HOUR` / `APPEALS_PER_DAY` | spam chegaralari |
-| `REQUIRE_HTTPS` | HTTPS majburiyligi (production: `true`) |
-| `HOST` | qaysi manzilda tinglaydi (nginx ortida: `127.0.0.1`) |
-| `TRUST_PROXY` | kimga ishonish: `loopback`, proksi IP'si yoki bo'sh. **Raqam yozmang** |
 | `SLA_HOURS` | javobsiz murojaat «kechikkan» deb belgilanadigan muddat |
-| `DIGEST_HOUR` / `TZ_OFFSET_HOURS` | kunlik xulosa soati va mahalliy vaqt farqi |
-| `NOTIFY_USER_ON_PROGRESS` | «Ko'rib chiqilmoqda»da muallifga xabar berilsinmi |
-| `STORAGE_MODE` | `replit` / `local` / `off` — bazani tashqi xotirada saqlash |
-| `BACKUP_TO_TELEGRAM` | bazani dekanat chatiga fayl qilib yuborish |
-
-`NODE_ENV=production` bo'lsa, zaif yoki standart kalitlar bilan server **ishga tushmaydi**.
+| `DIGEST_HOUR` | kunlik xulosa soati |
+| `BACKUP_TO_TELEGRAM` | bazani admin chatiga fayl qilib yuborish |
+| `STORAGE_MODE` | `replit` / `local` / `off` — fayl tizimi saqlanmaydigan muhitlar uchun |
+| `DATA_DIR` | baza joyi |
 
 ---
 
 ## 6. Xavfsizlik
 
-Tizimda amalga oshirilgan himoya choralari:
-
-**Admin panel**
-- Parol `scrypt` bilan hash qilinadi (N=32768) — ochiq matnda hech qayerda saqlanmaydi.
-- Sessiyalar bazada: istalgan vaqtda bekor qilish mumkin; cookie `HttpOnly`, `Secure`,
-  `SameSite=Strict`, HTTPS'da `__Host-` prefiksi bilan.
-- Sessiya brauzerga bog'lanadi (User-Agent o'zgarsa — bekor), harakatsizlik va umumiy muddat chegarasi.
-- **CSRF**: har bir o'zgartiruvchi so'rovda token + `Origin` tekshiruvi.
-- **Brute-force**: IP va login bo'yicha urinishlarni sanash va qulflash; "foydalanuvchi topilmadi"
-  bilan "parol xato" bir xil javob va bir xil vaqt (user enumeration yo'q).
-- Ikki qadamli kirish (TOTP) qo'llab-quvvatlanadi (`admins.totp_secret`).
-- Qat'iy HTTP sarlavhalar: `CSP (default-src 'none')`, `nosniff`, `X-Frame-Options: DENY`,
-  `Referrer-Policy: no-referrer`, HSTS, `noindex`.
-- Panel kodi foydalanuvchi matnini faqat `textContent` orqali chiqaradi — **XSS imkonsiz**.
-- Rollar: `owner` / `operator`; har bir amal audit jurnalida.
-
-**Bot va ma'lumotlar**
-- Webhook ikki qavat himoyalangan: **maxfiy yo'l** (tokendan hosil qilinadi) va Telegram'ning
-  `X-Telegram-Bot-Api-Secret-Token` sarlavhasi (vaqt-xavfsiz solishtiriladi).
-- Barcha SQL so'rovlar — prepared statement (**SQL injection imkonsiz**).
-- Fayllar serverda saqlanmaydi: faqat Telegram `file_id`. Yuklab olishda bot tokeni
-  brauzerga chiqmaydi, fayl `application/octet-stream` + `attachment` bilan beriladi.
-- CSV eksportda formula injection (`=`, `+`, `-`, `@`) neytrallanadi.
-- Baza fayllari `600` huquqi bilan; loglarda token/kalitlar avtomatik yashiriladi;
-  IP va User-Agent ochiq emas, kalitlangan hash ko'rinishida saqlanadi.
-- Murojaat matni boshqaruv belgilaridan tozalanadi va uzunligi cheklanadi.
-
-**Qo'shimcha himoyalar (audit natijasida kuchaytirilgan)**
-- Panel standart holatda faqat `127.0.0.1` da tinglaydi — tashqi tarmoqqa nginx orqali chiqadi.
-- `X-Forwarded-Proto` / `X-Forwarded-For` sarlavhalariga **faqat ishonchli proksidan**
-  kelganda ishoniladi (`TRUST_PROXY`), shuning uchun HTTPS majburiyligini va so'rov
-  chegaralarini soxta sarlavha bilan aylanib o'tib bo'lmaydi.
-- Kirishni qulflash login registriga bog'liq emas (`admin`/`ADMIN` — bitta hisoblagich).
-- Javob matni Telegram chegarasidan oshsa, avtomatik bo'laklanadi — javob yo'qolmaydi.
-- Emoji/maxsus belgilar matn kesilganda buzilmaydi (UTF-16 xavfsiz kesish).
-- O'chirilgan murojaatni faqat `owner` ko'radi; holati o'zgartirilmaydi, tiklash mumkin.
-- Faqat **o'z** telefon raqamini ulashish mumkin (begona kontakt qabul qilinmaydi).
-- Parol tekshiruvi **asinxron** (scrypt event-loop'ni bloklamaydi) — ko'p sonli
-  login urinishi panelni ham, botni ham sekinlashtirmaydi.
-- Hisob darajasidagi qulflash faqat **turli IP'lardan** hujum bo'lganda ishlaydi va
-  qulflangan so'rovlar yangi urinish sifatida yozilmaydi — shu sababli hujumchi
-  adminni panelдан uzib qo'ya olmaydi.
-- Arxivlangan murojaatning **fayllari** ham faqat `owner` uchun ochiq.
-
-> **Parol qayerda saqlanadi?** `.env` dagi `ADMIN_PASSWORD_HASH` faqat **eng birinchi**
-> ishga tushishda o'qiladi — keyin parol bazada saqlanadi. Shuning uchun parolni
-> keyinchalik `.env` orqali emas, panel («Parolni o'zgartirish») yoki
-> `npm run reset-password` orqali almashtiring.
-
-**Sizning zimmangizdagi ishlar**
-1. `.env` faylini `chmod 600` qiling va hech kimga bermang (ayniqsa `BOT_TOKEN`).
-2. Panelni faqat HTTPS orqali oching (`REQUIRE_HTTPS=true`), sertifikatni yangilab turing.
-3. Har bir xodimga **alohida login** yarating — umumiy parol ishlatmang.
-4. Xodim ishdan ketsa — uning loginini «O'chirish» tugmasi bilan bloklang.
-5. `npm run backup` ni kunlik `cron`ga qo'ying va nusxani boshqa joyda saqlang.
-6. Imkon bo'lsa, nginx'da panelni universitet tarmog'i IP'lari bilan cheklang
-   (namuna `deploy/nginx-limits.conf` ichida) va `ufw` bilan 8080-portni yoping.
-7. **Faqat bitta nusxa (instans)** ishlatilsin: baza SQLite, albom buferi esa
-   xotirada — ikki jarayon bir vaqtda ishlasa, fayllar va chegaralar chalkashadi.
-   (Yuklama oshsa, oldin bitta serverni kuchaytiring.)
-8. `npm audit` va `npm update` ni vaqti-vaqti bilan bajaring.
+- Bot tokeni va boshqa maxfiy qiymatlar faqat environment'da; logga tushmaydi.
+- Murojaat matni boshqaruv belgilaridan tozalanadi va HTML qochiriladi —
+  Telegram razmetkasini buzish yoki in'ektsiya qilish mumkin emas.
+- Barcha SQL so'rovlar prepared statement (SQL injection imkonsiz).
+- Admin amallari ikki qavat tekshiriladi: **chat** (`ADMIN_CHAT_IDS`) va
+  **odam** (`ADMIN_USER_IDS`). Begona chat yoki begona odam — rad etiladi.
+- Fuqaro boshqa odamning murojaatini raqam bilan ham ko'ra olmaydi.
+- Faqat **o'z** telefon raqamini ulashish mumkin.
+- Webhook ikki qavat himoyada: maxfiy yo'l + Telegram maxfiy sarlavhasi
+  (vaqt-xavfsiz solishtiriladi).
+- Baza fayli `600` huquqi bilan; emoji/uzun matn kesilganda xabar buzilmaydi.
+- Web-panel, parol va sessiya **umuman yo'q** — hujum maydoni shunchalik kichik.
+- `npm audit`: **0 ta zaiflik** (bog'liqliklar: `grammy`, `better-sqlite3`).
 
 ---
 
 ## 7. Zaxira va tiklash
 
-```bash
-npm run backup                  # data/backups/murojaat-2026-10-20-02-00.db
-
-# systemd bilan ishlaganda (baza /var/lib/murojaat-bot da):
-sudo -u murojaat DATA_DIR=/var/lib/murojaat-bot npm run backup
-
-# cron: har kuni 02:00 da
-0 2 * * * cd /opt/murojaat-bot/murojaat-bot && DATA_DIR=/var/lib/murojaat-bot /usr/bin/npm run backup >> /var/log/murojaat-backup.log 2>&1
-```
-
-**Tiklash.** Baza WAL rejimida ishlaydi, shuning uchun `-wal` va `-shm` fayllarini
-ham o'chirish **shart** — aks holda eski yozuvlar tiklangan baza ustiga qaytadan
-yozilib, zaxirani bekor qiladi:
+Bot har kuni (va `/zaxira` buyrug'i bilan) bazani admin chatiga yuboradi.
+Bu fayllarni o'chirmang — ular sizning zaxirangiz.
 
 ```bash
-sudo systemctl stop murojaat-bot
-D=/var/lib/murojaat-bot          # systemd'siz ishlatayotgan bo'lsangiz: D=./data
-sudo -u murojaat rm -f $D/murojaat.db $D/murojaat.db-wal $D/murojaat.db-shm
-sudo -u murojaat cp $D/backups/murojaat-2026-10-20-02-00.db $D/murojaat.db
-sudo -u murojaat chmod 600 $D/murojaat.db
-sudo systemctl start murojaat-bot
+npm run backup                      # qo'lda zaxira (data/backups/)
+npm run restore -- murojaat-....db.gz   # tiklash (xizmat to'xtatilgan holda)
 ```
+
+Murojaatlarning **matni** dekanat chatida ham qoladi — baza yo'qolsa ham
+yozishmalar Telegram'da saqlanib turadi.
 
 ---
 
@@ -337,34 +199,29 @@ sudo systemctl start murojaat-bot
 
 | Buyruq | Vazifasi |
 |---|---|
-| `npm start` | botni va panelni ishga tushirish |
-| `npm run setup` | birinchi sozlash (.env yaratish) |
-| `npm run hash -- "parol"` | parol hashini olish |
-| `npm run webhook set\|info\|delete` | webhook boshqaruvi |
+| `npm start` | botni ishga tushirish |
+| `npm test` | uchdan-uchiga tekshiruv (59 test, Telegram'siz) |
 | `npm run backup` | bazaning zaxira nusxasi |
-| `npm run reset-password -- <login> "<parol>"` | parolni unutganda yangilash (sessiyalar bekor qilinadi) |
-| `npm run restore -- <fayl>` | zaxiradan tiklash (`.db` yoki `.db.gz`) |
-| `npm run replit-secrets -- "<parol>"` | Replit Secrets uchun kalitlarni yaratish |
-| `npm test` | uchdan-uchiga tekshiruv (177 ta test, Telegram'siz) |
+| `npm run restore -- <fayl>` | zaxiradan tiklash |
+| `npm run webhook set\|info\|delete` | webhook boshqaruvi |
 
 ---
 
 ## 9. Muammolar
 
-| Belgi | Sabab va yechim |
+| Belgi | Yechim |
 |---|---|
-| `⛔️ Sozlamalarda xato` | ro'yxatdagi kalitlarni `.env` ga qo'shing; `npm run setup` yordam beradi |
-| Bot javob bermayapti | `npm run webhook info` — xatoni ko'ring; polling'da token to'g'riligini tekshiring |
-| Panelga kira olmayapman | 15 daqiqa kutib qayta urinib ko'ring (qulflash). Parolni unutgan bo'lsangiz: `npm run reset-password -- <login> "<yangi parol>"` |
-| «Sessiya tugadi» tez-tez | `SESSION_IDLE_MINUTES` ni oshiring; VPN/brauzer o'zgarishi sessiyani bekor qiladi |
-| Javob yetmadi | foydalanuvchi botni bloklagan bo'lishi mumkin — panelda «yetkazilmadi» belgisi chiqadi |
-| Fayl ochilmadi | Telegram fayllari muddati o'tgan bo'lishi mumkin; murojaat egasidan qayta so'rang |
+| `⛔️ Sozlamalarda xato` | logda qaysi qiymat yetishmayotgani yozilgan |
+| Murojaat kelmayapti | `ADMIN_CHAT_IDS` to'g'rimi; guruh bo'lsa bot guruhga qo'shilganmi |
+| Guruhda javob ishlamayapti | botga guruhda **admin** huquqi bering (xabarlarni ko'rishi uchun) |
+| «Sizda huquq yo'q» | `ADMIN_USER_IDS` ga o'z ID'ingizni qo'shing |
+| Javob yetmadi | fuqaro botni bloklagan — xabar aniq ko'rsatiladi |
+| `better-sqlite3` xatosi | `npm rebuild better-sqlite3 --build-from-source` |
 
 ---
 
 ## 10. Maxfiylik
 
-Murojaat matni, muallifning ismi, Telegram username/ID va (ulashsa) telefon raqami
-serveringizdagi bazada saqlanadi. Bu ma'lumotlar faqat dekanat xodimlari ko'radigan
-panelga chiqadi va uchinchi shaxslarga berilmaydi. Foydalanuvchi bu haqda `/yordam`
-bo'limida xabardor qilinadi. Kerak bo'lmagan murojaatlarni `owner` o'chirishi mumkin.
+Murojaat matni, ism, Telegram username/ID va (ulashsa) telefon raqami dekanat
+chatiga yuboriladi va serveringizdagi bazada saqlanadi. Boshqa hech kimga
+berilmaydi. Foydalanuvchi bu haqda `/yordam` bo'limida xabardor qilinadi.

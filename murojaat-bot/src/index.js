@@ -1,56 +1,81 @@
 'use strict';
 /* =====================================================================
-   KIRISH NUQTASI — botni va admin panel serverini ishga tushiradi.
+   KIRISH NUQTASI
+
+   Botni ishga tushiradi. Web-panel yo'q — HTTP server faqat ikki narsa
+   uchun kerak: holat tekshiruvi (/healthz) va webhook rejimi.
    ===================================================================== */
 const http = require('http');
+const { webhookCallback } = require('grammy');
 const { config, validate } = require('./config');
 const log = require('./logger');
 
-/* --- 1. Sozlamalarni tekshirish: xato bo'lsa, ishga tushmaymiz --- */
+/* --- 1. Sozlamalarni tekshirish --- */
 const { fatal, warn } = validate();
 for (const message of warn) log.warn('sozlama: ' + message);
 if (fatal.length) {
-  console.error('\n  ⛔️ Sozlamalarda xato — server ishga tushmadi:\n');
+  console.error('\n  ⛔️ Sozlamalarda xato — bot ishga tushmadi:\n');
   for (const message of fatal) console.error('   • ' + message);
-  console.error('\n  Yordam:  npm run setup  (kalitlarni yaratib, .env namunasini chiqaradi)');
-  console.error('  Replit uchun:  npm run replit-secrets -- "Parolingiz"\n');
+  console.error('\n  Kerakli sozlamalar: BOT_TOKEN va ADMIN_CHAT_IDS');
+  console.error('  Namuna: .env.example faylida, qo\'llanma: README.md\n');
   process.exit(1);
 }
 
-/* Doimiy saqlash moduli bazaga TEGMAYDI — uni bazadan oldin yuklash mumkin */
+/* Doimiy saqlash bazaga tegmaydi — uni oldin yuklash mumkin */
 const storage = require('./storage');
 
-/* Quyidagilar bazani ochadi, shuning uchun tiklashdan KEYIN yuklanadi */
-let db = null;
+let store = null;
 let bot = null;
 let setMyCommands = null;
 let sendDailyDigest = null;
 let sendBackupToTelegram = null;
-let createApp = null;
-
-let server;
+let server = null;
 let shuttingDown = false;
 
+function createServer() {
+  const handleWebhook = config.botMode === 'webhook'
+    ? webhookCallback(bot, 'http', { secretToken: config.webhookSecret, timeoutMilliseconds: 25_000, onTimeout: 'return' })
+    : null;
+
+  return http.createServer((req, res) => {
+    const url = (req.url || '').split('?')[0];
+
+    if (handleWebhook && req.method === 'POST' && url === config.webhookPath) {
+      return handleWebhook(req, res);
+    }
+
+    if (req.method === 'GET' && (url === '/healthz' || url === '/' || url === '/health')) {
+      const botOk = config.botMode !== 'polling' || !!bot.botInfo;
+      const body = JSON.stringify({
+        ok: botOk,
+        bot: botOk,
+        mode: config.botMode,
+        storage: storage.isEnabled(),
+        admins: config.adminChatIds.length,
+        time: new Date().toISOString(),
+      });
+      res.writeHead(botOk ? 200 : 503, {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Cache-Control': 'no-store',
+        'X-Content-Type-Options': 'nosniff',
+        'X-Robots-Tag': 'noindex, nofollow',
+      });
+      return res.end(body);
+    }
+
+    res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8', 'X-Robots-Tag': 'noindex' });
+    res.end('Bu manzilda hech narsa yo\'q. Murojaat uchun Telegram botdan foydalaning.\n');
+  });
+}
+
 async function main() {
-  /* --- 2. Replit kabi muhitlarda: saqlangan bazani tiklaymiz --- */
+  /* --- 2. Saqlangan bazani tiklash (Replit kabi muhitlar uchun) --- */
   await storage.restoreIfMissing();
 
-  db = require('./db');
+  store = require('./store');
   ({ bot, setMyCommands, sendDailyDigest, sendBackupToTelegram } = require('./bot'));
-  ({ createApp } = require('./server'));
 
-  /* --- 3. Birinchi ishga tushishda admin (owner) hisobini yaratish --- */
-  const owner = db.ensureOwner();
-  if (owner) log.info(`admin hisobi yaratildi: "${owner.username}" (owner)`);
-  db.purgeOld();
-
-  /* Har 6 soatda eski sessiya/urinishlarni tozalash */
-  const cleanup = setInterval(() => {
-    try { db.purgeOld(); } catch (err) { log.warn('tozalash xatosi', { error: String(err.message) }); }
-  }, 6 * 3600_000);
-  cleanup.unref();
-
-  /* Kunlik xulosa va Telegram zaxirasi: har 20 daqiqada tekshiriladi */
+  /* --- 3. Jadvalli vazifalar --- */
   const digest = setInterval(() => {
     sendDailyDigest().catch((err) => log.warn('kunlik xulosa xatosi', { error: String(err.message) }));
     sendBackupToTelegram().catch((err) => log.warn('zaxira xatosi', { error: String(err.message) }));
@@ -64,7 +89,6 @@ async function main() {
     firstBackup.unref();
   }
 
-  /* Doimiy saqlash: o'zgarish bo'lsa nusxani yangilab turamiz */
   if (storage.isEnabled()) {
     const sync = setInterval(() => {
       storage.snapshot('interval').catch((err) => log.warn('nusxa xatosi', { error: String(err.message) }));
@@ -72,9 +96,8 @@ async function main() {
     sync.unref();
   }
 
-  /* --- 4. Web server (admin panel + webhook) --- */
-  const app = createApp();
-  server = http.createServer(app);
+  /* --- 4. HTTP server (holat + webhook) --- */
+  server = createServer();
   server.headersTimeout = 20_000;
   server.requestTimeout = 60_000;
   await new Promise((resolve, reject) => {
@@ -82,7 +105,7 @@ async function main() {
     server.listen(config.port, config.host, resolve);
   });
 
-  /* --- 5. Telegram bot --- */
+  /* --- 5. Bot --- */
   if (config.botMode === 'polling') {
     bot.start({
       drop_pending_updates: false,
@@ -96,21 +119,19 @@ async function main() {
       log.info(`bot "webhook" rejimida: @${bot.botInfo.username}`);
       await setMyCommands();
     } catch (err) {
-      log.warn('Telegram bilan bog\'lanib bo\'lmadi — panel ishlaydi, webhook kelganda qayta urinadi', { error: String(err.message) });
+      log.warn('Telegram bilan bog\'lanib bo\'lmadi — webhook kelganda qayta urinadi', { error: String(err.message) });
     }
   }
 
-  const where = config.publicUrl || `http://${config.host === '0.0.0.0' ? 'localhost' : config.host}:${config.port}`;
-  log.info('admin panel: ' + where);
+  log.info(`murojaatlar shu chatlarga boradi: ${config.adminChatIds.join(', ')}`);
   log.info(`rejim: ${config.nodeEnv} · ma'lumot: ${config.dbFile}`);
+  log.info(`holat tekshiruvi: http://${config.host}:${config.port}/healthz`);
   if (config.isReplit) log.info('muhit: Replit' + (storage.isEnabled() ? ' (doimiy saqlash yoqilgan)' : ' ⚠️ doimiy saqlash YO\'Q'));
-  if (config.botMode === 'webhook') log.info('webhook: ' + (config.webhookUrl || '(PUBLIC_URL yo\'q)') + '  — "npm run webhook set" bilan ro\'yxatdan o\'tkazing');
+  if (config.botMode === 'webhook') log.info('webhook: ' + (config.webhookUrl || '(PUBLIC_URL yo\'q)') + ' — "npm run webhook set" bilan ro\'yxatdan o\'tkazing');
 }
 
 /* =====================================================================
    XAVFSIZ TO'XTASH
-   Replit'da to'xtash = konteyner yo'qolishi bo'lishi mumkin, shuning uchun
-   chiqishdan oldin bazani saqlab qolishga ulguramiz.
    ===================================================================== */
 async function shutdown(signal) {
   if (shuttingDown) return;
@@ -124,14 +145,12 @@ async function shutdown(signal) {
 
   try { if (server) await new Promise((resolve) => server.close(resolve)); } catch { /* yopilgan */ }
 
-  /* Oxirgi nusxani tashqi xotiraga saqlaymiz (eng muhim qadam) */
-  if (db && storage.isEnabled()) {
+  if (store && storage.isEnabled()) {
     try { await storage.snapshot('shutdown'); }
     catch (err) { log.error('oxirgi nusxa saqlanmadi', { error: String(err.message) }); }
   }
 
-  /* Telegram'ga ham yuboramiz — ofsayt (tashqi) nusxa sifatida */
-  if (db && config.backupToTelegram && signal !== 'uncaughtException') {
+  if (store && config.backupToTelegram && signal !== 'uncaughtException') {
     try {
       const result = await Promise.race([
         sendBackupToTelegram({ force: true }),
@@ -141,7 +160,7 @@ async function shutdown(signal) {
     } catch (err) { log.warn('to\'xtashdan oldingi zaxira xatosi', { error: String(err.message) }); }
   }
 
-  try { if (db) db.close(); } catch { /* yopilgan */ }
+  try { if (store) store.close(); } catch { /* yopilgan */ }
   log.info('to\'xtadi.');
   process.exit(0);
 }

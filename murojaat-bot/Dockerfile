@@ -17,7 +17,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends tini \
 COPY --from=build /app/node_modules ./node_modules
 COPY package.json ./
 COPY src ./src
-COPY public ./public
 COPY scripts ./scripts
 # Ma'lumotlar doimiy jildda (volume) saqlanadi
 RUN mkdir -p /data && chown -R node:node /data /app

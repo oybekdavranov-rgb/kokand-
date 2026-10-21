@@ -47,7 +47,7 @@ try {
   if (integrity !== 'ok') throw new Error('integrity_check: ' + integrity);
   summary = {
     appeals: check.prepare('SELECT COUNT(*) AS n FROM appeals').get().n,
-    admins: check.prepare('SELECT COUNT(*) AS n FROM admins').get().n,
+    users: check.prepare('SELECT COUNT(*) AS n FROM users').get().n,
     version: check.pragma('user_version', { simple: true }),
   };
   check.close();

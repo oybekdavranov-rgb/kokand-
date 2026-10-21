@@ -25,7 +25,7 @@ Repozitoriyda ikkita mustaqil ilova bor:
 | Papka | Nima |
 |---|---|
 | `/` (shu yerda) | **Tashkiliy tuzilma sayti** — Node + Express, `data.json` |
-| `murojaat-bot/` | **Murojaat boti** — Ta'lim fakulteti dekanati uchun Telegram bot + yopiq admin panel ([qo'llanma](murojaat-bot/README.md)) |
+| `murojaat-bot/` | **Murojaat boti** — murojaatlar Telegram orqali to'g'ridan-to'g'ri dekanatga boradi ([qo'llanma](murojaat-bot/README.md)) |
 
 Ular alohida ishga tushadi va bir-biriga bog'liq emas.
 
