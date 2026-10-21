@@ -34,6 +34,20 @@ const apiLimiter = new RateLimiter({ windowMs: 60_000, max: 300, name: 'api' });
 const writeLimiter = new RateLimiter({ windowMs: 60_000, max: 60, name: 'write' });
 
 /* ---- Yordamchilar ---- */
+/**
+ * So'rov protokoli. Replit kabi muhitlarda "trust proxy = 1" bo'lgani uchun
+ * Express X-Forwarded-Proto ning ENG CHAP qiymatini oladi — uni esa mijoz
+ * soxtalashtirishi mumkin. Shuning uchun ENG O'NG (bizga eng yaqin proksi
+ * qo'ygan) qiymatni olamiz.
+ */
+function effectiveProtocol(req) {
+  if (!config.isReplit) return req.protocol;          // VPS/nginx: o'zgarishsiz
+  const forwarded = req.headers['x-forwarded-proto'];
+  if (!forwarded) return req.protocol;
+  const parts = String(forwarded).split(',');
+  return parts[parts.length - 1].trim().toLowerCase();
+}
+
 const clientIp = (req) => req.ip || req.socket?.remoteAddress || '0.0.0.0';
 const ipHash = (req) => keyedHash(clientIp(req), config.sessionSecret);
 const uaHash = (req) => keyedHash(req.headers['user-agent'] || '', config.sessionSecret);
@@ -141,7 +155,18 @@ function createApp() {
   app.get(['/healthz', '/api/health'], (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
     res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.json({ ok: true, mode: config.botMode, time: new Date().toISOString() });
+    /* Tekshiruv haqiqatni ko'rsatishi kerak: bot ulanganmi va HTTPS
+       sozlamasi to'g'rimi. Aks holda buzilgan deploy "sog'lom" ko'rinadi. */
+    const botOk = config.botMode !== 'polling' || !!bot.botInfo;
+    const proto = effectiveProtocol(req);
+    const httpsOk = !config.requireHttps || proto === 'https' || !req.headers['x-forwarded-proto'];
+    const ok = botOk && httpsOk;
+    res.status(ok ? 200 : 503).json({
+      ok, bot: botOk, https: httpsOk,
+      mode: config.botMode,
+      storage: require('./storage').isEnabled(),
+      time: new Date().toISOString(),
+    });
   });
 
   /* --- Xavfsizlik sarlavhalari + HTTPS majburiyligi --- */
@@ -167,7 +192,7 @@ function createApp() {
 
     /* req.protocol X-Forwarded-Proto'ni FAQAT ishonchli proksidan (trust proxy)
        kelganda hisobga oladi — shuning uchun sarlavhani o'zimiz o'qimaymiz. */
-    const proto = req.protocol;
+    const proto = effectiveProtocol(req);
     if (config.requireHttps) {
       res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
       if (proto !== 'https' && req.method === 'GET') {

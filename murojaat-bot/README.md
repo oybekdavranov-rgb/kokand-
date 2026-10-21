@@ -18,6 +18,8 @@ Barcha ma'lumot **o'z serveringizda** (SQLite) saqlanadi — tashqi xizmatlarga 
 
 ---
 
+> Replit'da ishga tushirmoqchimisiz? → **[REPLIT.md](REPLIT.md)** (qadamma-qadam, o'zbekcha)
+
 ## 1. Tez boshlash (5 daqiqa)
 
 ```bash
@@ -178,7 +180,23 @@ docker compose logs -f
 > talqin qiladi va parol hashini buzib qo'yadi — shu sababli alohida fayl
 > ishlatiladi. (Hash endi `$` o'rniga `.` bilan yoziladi, bu ham qo'shimcha himoya.)
 
-### C. Polling yoki webhook?
+### C. Replit
+
+Brauzerdan, server sozlamasdan ishga tushirish mumkin — bot Replit muhitini
+o'zi taniydi va sozlanadi. To'liq qo'llanma: **[REPLIT.md](REPLIT.md)**.
+
+```bash
+npm install
+npm i --no-save @replit/object-storage          # faqat Replit uchun
+npm run replit-secrets -- "ParolingizBuYerda"   # kalitlarni yaratadi
+```
+
+> **Muhim:** Replit'da nashr qilingan ilovaning fayl tizimi saqlanmaydi.
+> Shuning uchun **App Storage** bucket'ini yoqish shart (REPLIT.md, 3-qadam) —
+> shunda baza tashqi xotirada saqlanib, qayta ishga tushganda avtomatik tiklanadi.
+> Qo'shimcha himoya sifatida baza har kuni Telegram'ga fayl bo'lib yuboriladi.
+
+### D. Polling yoki webhook?
 
 | | polling | webhook |
 |---|---|---|
@@ -215,6 +233,8 @@ Barcha kalitlar va izohlar — `.env.example` faylida. Eng muhimlari:
 | `SLA_HOURS` | javobsiz murojaat «kechikkan» deb belgilanadigan muddat |
 | `DIGEST_HOUR` / `TZ_OFFSET_HOURS` | kunlik xulosa soati va mahalliy vaqt farqi |
 | `NOTIFY_USER_ON_PROGRESS` | «Ko'rib chiqilmoqda»da muallifga xabar berilsinmi |
+| `STORAGE_MODE` | `replit` / `local` / `off` — bazani tashqi xotirada saqlash |
+| `BACKUP_TO_TELEGRAM` | bazani dekanat chatiga fayl qilib yuborish |
 
 `NODE_ENV=production` bo'lsa, zaif yoki standart kalitlar bilan server **ishga tushmaydi**.
 
@@ -323,7 +343,9 @@ sudo systemctl start murojaat-bot
 | `npm run webhook set\|info\|delete` | webhook boshqaruvi |
 | `npm run backup` | bazaning zaxira nusxasi |
 | `npm run reset-password -- <login> "<parol>"` | parolni unutganda yangilash (sessiyalar bekor qilinadi) |
-| `npm test` | uchdan-uchiga tekshiruv (158 ta test, Telegram'siz) |
+| `npm run restore -- <fayl>` | zaxiradan tiklash (`.db` yoki `.db.gz`) |
+| `npm run replit-secrets -- "<parol>"` | Replit Secrets uchun kalitlarni yaratish |
+| `npm test` | uchdan-uchiga tekshiruv (177 ta test, Telegram'siz) |
 
 ---
 

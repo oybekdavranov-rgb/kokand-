@@ -34,6 +34,7 @@ const section = (title) => console.log('\n── ' + title + ' ' + '─'.repeat(
 /* ===================== Soxta Telegram Bot API ======================= */
 const sent = [];        // yuborilgan xabarlar
 const apiCalls = [];    // chaqirilgan Bot API metodlari
+const documents = [];   // yuborilgan fayllar (zaxira)
 let messageId = 1000;
 
 function mockApi() {
@@ -41,9 +42,25 @@ function mockApi() {
     const chunks = [];
     req.on('data', (chunk) => chunks.push(chunk));
     req.on('end', () => {
-      const body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString() || '{}') : {};
+      const rawBody = Buffer.concat(chunks);
       const method = req.url.split('/').pop();
       apiCalls.push(method);
+
+      /* Fayl yuborish — multipart/form-data, JSON emas */
+      if (method === 'sendDocument') {
+        const text = rawBody.toString('latin1');
+        /* grammY fayl nomini tirnoqsiz yuboradi: filename=murojaat-....db.gz */
+        const fileName = (/filename="?([^";\r\n]+)"?/.exec(text) || [])[1] || '';
+        const chatId = (/name="chat_id"\r\n\r\n([^\r]+)/.exec(text) || [])[1] || '';
+        const caption = (/name="caption"\r\n\r\n([\s\S]*?)\r\n--/.exec(text) || [])[1] || '';
+        documents.push({ chat_id: chatId, fileName, caption, size: rawBody.length });
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, result: { message_id: ++messageId, document: { file_name: fileName } } }));
+        return;
+      }
+
+      let body = {};
+      try { body = rawBody.length ? JSON.parse(rawBody.toString() || '{}') : {}; } catch { body = {}; }
 
       if (req.url.includes('/file/bot')) {
         res.writeHead(200, { 'Content-Type': 'application/octet-stream' });
@@ -1061,6 +1078,193 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
       await sleep(400);
       child2.kill('SIGKILL');
       fs.rmSync(dataDir2, { recursive: true, force: true });
+    }
+
+    section('Replit muhiti (avtomatik sozlanish)');
+    {
+      const probe5 = http.createServer();
+      const port5 = await listen(probe5);
+      await new Promise((r) => probe5.close(r));
+      const replitDir = fs.mkdtempSync(path.join(os.tmpdir(), 'murojaat-replit-'));
+
+      /* Replit'da foydalanuvchi faqat Secrets qo'yadi: HOST, TRUST_PROXY,
+         REQUIRE_HTTPS, PUBLIC_URL berilmaydi — ilova o'zi aniqlashi kerak */
+      const replitChild = spawn(process.execPath, [path.join(__dirname, '..', 'src', 'index.js')], {
+        env: {
+          PATH: process.env.PATH, HOME: process.env.HOME,
+          ENV_FILE: '/dev/null', LOG_LEVEL: 'warn',
+          REPL_ID: 'test-repl-id', REPL_SLUG: 'murojaat-bot', REPL_OWNER: 'dekanat',
+          REPLIT_DOMAINS: `127.0.0.1:${port5}`, REPLIT_DEPLOYMENT: '1',
+          PORT: String(port5),
+          BOT_TOKEN, BOT_API_ROOT: `http://127.0.0.1:${apiPort}`,
+          BOT_MODE: 'webhook', WEBHOOK_SECRET, SESSION_SECRET,
+          ADMIN_USERNAME: 'dekanat', ADMIN_PASSWORD, DATA_DIR: replitDir,
+        },
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      const replitLogs = [];
+      replitChild.stdout.on('data', (c) => replitLogs.push(c.toString()));
+      replitChild.stderr.on('data', (c) => replitLogs.push(c.toString()));
+
+      const replitBase = `http://127.0.0.1:${port5}`;
+      let replitUp = false;
+      for (let i = 0; i < 50 && !replitUp; i++) {
+        try { replitUp = (await fetch(replitBase + '/healthz', { redirect: 'manual' })).status === 200; } catch { await sleep(200); }
+      }
+      check('replit: sozlamasiz (faqat Secrets bilan) ishga tushadi', replitUp, replitLogs.join('').slice(-250));
+
+      /* Replit proxy'si shunday so'rov yuboradi */
+      const viaProxy = (pathname, init = {}) => fetch(replitBase + pathname, {
+        ...init, redirect: 'manual',
+        headers: {
+          'X-Forwarded-Proto': 'https', 'X-Forwarded-For': '203.0.113.77',
+          Host: 'murojaat-bot.dekanat.replit.app', 'User-Agent': UA,
+          ...(init.headers || {}),
+        },
+      });
+
+      const replitPage = await viaProxy('/');
+      check('replit: panel ochiladi (cheksiz redirect yo\'q)', replitPage.status === 200,
+        `status=${replitPage.status} location=${replitPage.headers.get('location')}`);
+
+      const replitLogin = await viaProxy('/api/login', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: 'dekanat', password: ADMIN_PASSWORD }),
+      });
+      const replitCookie = replitLogin.headers.get('set-cookie') || '';
+      check('replit: panelga kirish ishlaydi', replitLogin.status === 200, 'status=' + replitLogin.status);
+      check('replit: cookie __Host- + Secure bilan beriladi',
+        replitCookie.includes('__Host-') && replitCookie.includes('Secure') && replitCookie.includes('SameSite=Strict'),
+        replitCookie.slice(0, 90));
+
+      const replitMe = await viaProxy('/api/me', { headers: { Cookie: replitCookie.split(';')[0] } });
+      check('replit: sessiya amal qiladi', replitMe.status === 200, 'status=' + replitMe.status);
+
+      const replitDirect = await fetch(replitBase + '/api/me', { redirect: 'manual', headers: { 'User-Agent': UA } });
+      check('replit: HTTPSsiz so\'rov hamon yo\'naltiriladi', replitDirect.status === 308, 'status=' + replitDirect.status);
+
+      /* Mijoz o'zi "X-Forwarded-Proto: https" qo'shsa — proksi qiymati ENG O'NGDA
+         bo'ladi, shuning uchun soxtalashtirish ishlamasligi kerak */
+      const spoofProto = await fetch(replitBase + '/api/login', {
+        method: 'POST', redirect: 'manual',
+        headers: { 'Content-Type': 'application/json', 'X-Forwarded-Proto': 'https, http', 'User-Agent': UA },
+        body: JSON.stringify({ username: 'dekanat', password: ADMIN_PASSWORD }),
+      });
+      check('replit: soxta X-Forwarded-Proto HTTPS himoyasini buzmaydi', spoofProto.status === 400, 'status=' + spoofProto.status);
+
+      const realProto = await fetch(replitBase + '/healthz', {
+        redirect: 'manual', headers: { 'X-Forwarded-Proto': 'http, https', 'User-Agent': UA },
+      });
+      check('replit: haqiqiy proksi qiymati qabul qilinadi', realProto.status === 200, 'status=' + realProto.status);
+
+      const replitHook = await fetch(replitBase + WEBHOOK_PATH, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Telegram-Bot-Api-Secret-Token': WEBHOOK_SECRET, 'X-Forwarded-Proto': 'https' },
+        body: JSON.stringify({
+          update_id: 777_777,
+          message: { message_id: 1, date: Math.floor(Date.now() / 1000), chat: { id: 931, type: 'private' }, from: { id: 931, is_bot: false, first_name: 'Replit' }, text: 'Replit orqali kelgan sinov murojaati matni.' },
+        }),
+      });
+      await sleep(300);
+      check('replit: webhook qabul qilinadi', replitHook.status === 200, 'status=' + replitHook.status);
+
+      const replitDb = new Database(path.join(replitDir, 'murojaat.db'), { readonly: true });
+      const replitCount = replitDb.prepare('SELECT COUNT(*) AS n FROM appeals').get().n;
+      replitDb.close();
+      check('replit: murojaat bazaga saqlanadi', replitCount === 1, 'murojaatlar: ' + replitCount);
+
+      replitChild.kill('SIGTERM'); await sleep(400); replitChild.kill('SIGKILL');
+      fs.rmSync(replitDir, { recursive: true, force: true });
+    }
+
+    section('Zaxira va doimiy saqlash');
+
+    /* Telegram orqali zaxira: dekanat chatidan /zaxira buyrug'i */
+    documents.length = 0;
+    sent.length = 0;
+    await sendUpdate({
+      message: {
+        message_id: ++messageId, date: Math.floor(Date.now() / 1000),
+        chat: { id: 999, type: 'group' }, from: { id: 555, is_bot: false, first_name: 'Dekan' },
+        text: '/zaxira',
+      },
+    });
+    await sleep(900);
+    const backupDoc = documents.find((d) => String(d.chat_id) === '999');
+    check('zaxira: /zaxira buyrug\'i bazani fayl qilib yuboradi', !!backupDoc, JSON.stringify(documents).slice(0, 150));
+    check('zaxira: fayl nomi va hajmi to\'g\'ri',
+      !!backupDoc && /^murojaat-[\d-]+\.db\.gz$/.test(backupDoc.fileName) && backupDoc.size > 500,
+      backupDoc ? `${backupDoc.fileName} (${backupDoc.size} bayt)` : '');
+    check('zaxira: izohda murojaatlar soni ko\'rsatiladi',
+      !!backupDoc && backupDoc.caption.includes('Murojaatlar'), backupDoc ? backupDoc.caption.slice(0, 80) : '');
+
+    /* Doimiy saqlash (local rejim): nusxa olish va tiklash */
+    {
+      const { execFileSync } = require('child_process');
+      const root = path.join(__dirname, '..');
+      const storeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'murojaat-store-'));
+      const liveDir = fs.mkdtempSync(path.join(os.tmpdir(), 'murojaat-live-'));
+      const storageEnv = {
+        ...process.env, ENV_FILE: '/dev/null', NODE_ENV: 'development',
+        BOT_TOKEN, SESSION_SECRET, ADMIN_PASSWORD,
+        DATA_DIR: liveDir, STORAGE_MODE: 'local', STORAGE_DIR: storeDir, LOG_LEVEL: 'error',
+      };
+      const runNode = (code, env = storageEnv) => {
+        try {
+          return { ok: true, out: execFileSync(process.execPath, ['-e', code], { cwd: root, env, encoding: 'utf8' }) };
+        } catch (err) { return { ok: false, out: String(err.stdout || '') + String(err.stderr || '') }; }
+      };
+
+      const created = runNode(`
+        const db = require('./src/db');
+        db.upsertUser({ id: 4242, first_name: 'Saqlash' });
+        db.createAppeal({ tgId: 4242, authorName: 'Saqlash', body: 'Doimiy saqlashni tekshirish uchun murojaat.', chatId: 4242 });
+        require('./src/storage').snapshot('shutdown').then((r) => { db.close(); console.log(JSON.stringify(r)); });
+      `);
+      let snapResult = {};
+      try { snapResult = JSON.parse(created.out.trim().split('\n').pop()); } catch { /* xato */ }
+      check('saqlash: nusxa tashqi xotiraga yozildi', created.ok && snapResult.saved === true, created.out.slice(-200));
+      check('saqlash: nusxa fayli mavjud', fs.readdirSync(storeDir).some((f) => f.includes('live.db')), fs.readdirSync(storeDir).join(','));
+
+      /* Fayl tizimi tozalandi (Replit "Publish" holati) */
+      for (const f of fs.readdirSync(liveDir)) fs.rmSync(path.join(liveDir, f), { recursive: true, force: true });
+      check('saqlash: baza o\'chirildi (nashr holati taqlid qilindi)', !fs.existsSync(path.join(liveDir, 'murojaat.db')));
+
+      const restored = runNode(`
+        require('./src/storage').restoreIfMissing().then((ok) => {
+          const db = require('./src/db');
+          console.log(JSON.stringify({ ok, appeals: db.listAppeals().total }));
+        });
+      `);
+      let restoreResult = {};
+      try { restoreResult = JSON.parse(restored.out.trim().split('\n').pop()); } catch { /* xato */ }
+      check('saqlash: ishga tushishda baza avtomatik tiklandi',
+        restored.ok && restoreResult.ok === true && restoreResult.appeals === 1,
+        restored.out.slice(-200));
+
+      /* npm run restore — Telegram zaxirasidan tiklash */
+      const gzPath = path.join(storeDir, 'qoldan-tiklash.db.gz');
+      const liveDb = path.join(liveDir, 'murojaat.db');
+      fs.writeFileSync(gzPath, require('zlib').gzipSync(fs.readFileSync(liveDb)));
+      fs.rmSync(liveDb, { force: true });
+      const restoreScript = (() => {
+        try {
+          return { ok: true, out: execFileSync(process.execPath, [path.join(root, 'scripts', 'restore.js'), gzPath], { cwd: root, env: storageEnv, encoding: 'utf8' }) };
+        } catch (err) { return { ok: false, out: String(err.stdout || '') + String(err.stderr || '') }; }
+      })();
+      check('saqlash: "npm run restore" .gz fayldan tiklaydi',
+        restoreScript.ok && restoreScript.out.includes('Murojaatlar: 1'), restoreScript.out.slice(-200));
+
+      const badFile = path.join(storeDir, 'buzuq.db');
+      fs.writeFileSync(badFile, 'bu baza emas');
+      const badRestore = (() => {
+        try { execFileSync(process.execPath, [path.join(root, 'scripts', 'restore.js'), badFile], { cwd: root, env: storageEnv, encoding: 'utf8', stdio: 'pipe' }); return { ok: true, out: '' }; }
+        catch (err) { return { ok: false, out: String(err.stdout || '') + String(err.stderr || '') }; }
+      })();
+      check('saqlash: yaroqsiz fayl rad etiladi', !badRestore.ok && badRestore.out.includes('yaroqli zaxira emas'), badRestore.out.slice(-120));
+
+      fs.rmSync(storeDir, { recursive: true, force: true });
+      fs.rmSync(liveDir, { recursive: true, force: true });
     }
 
     section('Ma\'lumot fayli huquqlari');

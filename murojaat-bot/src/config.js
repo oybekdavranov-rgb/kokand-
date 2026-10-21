@@ -64,8 +64,25 @@ const bool = (key, def) => {
 };
 const list = (key) => str(key, '').split(/[,\s]+/).filter(Boolean);
 
-const NODE_ENV = str('NODE_ENV', 'development');
-const isProd = NODE_ENV === 'production';
+/* =====================================================================
+   REPLIT muhitini avtomatik aniqlash.
+   Replit konteyneri oldida o'zining HTTPS proxy'si turadi va ilovaga
+   X-Forwarded-Proto/For sarlavhalarini qo'shadi. Shu sababli u yerda
+   sozlamalar boshqacha bo'lishi kerak — foydalanuvchi qo'lda yozmasin.
+   ===================================================================== */
+const isReplit = !!(process.env.REPL_ID || process.env.REPL_SLUG || process.env.REPLIT_DEPLOYMENT);
+const replitDomain = (() => {
+  const domains = str('REPLIT_DOMAINS') || str('REPLIT_DEV_DOMAIN');
+  const first = domains.split(',')[0].trim();
+  if (first) return first;
+  const slug = str('REPL_SLUG');
+  const owner = str('REPL_OWNER');
+  return slug && owner ? `${slug}.${owner}.repl.co` : '';
+})();
+
+const NODE_ENV = str('NODE_ENV', isReplit ? 'production' : 'development');
+/* Replit'da e'lon qilingan (deployment) ilova — bu ishlab chiqarish muhiti */
+const isProd = NODE_ENV === 'production' || str('REPLIT_DEPLOYMENT') === '1';
 
 /* Zaif, hammaga ma'lum qiymatlar — production'da qat'iyan taqiqlanadi */
 const WEAK = [
@@ -79,18 +96,23 @@ const dataDir = path.resolve(str('DATA_DIR', path.join(__dirname, '..', 'data'))
 const config = {
   nodeEnv: NODE_ENV,
   isProd,
+  isReplit,
+  replitDomain,
 
   /* --- HTTP --- */
   port: num('PORT', 8080, { min: 1, max: 65535 }),
   /* Standart: faqat loopback. Panel hech qachon to'g'ridan tashqi
      interfeysda tinglamasligi kerak — oldida nginx (TLS) turadi.
      Docker ichida HOST=0.0.0.0 qilinadi (konteyner tarmog'i uchun). */
-  host: str('HOST', '127.0.0.1'),
+  host: str('HOST', isReplit ? '0.0.0.0' : '127.0.0.1'),
   /* Reverse-proxy ortida: 'loopback' (nginx bir mashinada) yoki aniq IP.
      "1" (hop soni) XAVFLI — mijoz X-Forwarded-For/Proto'ni soxtalashtira oladi. */
-  trustProxy: str('TRUST_PROXY', isProd ? 'loopback' : ''),
-  requireHttps: bool('REQUIRE_HTTPS', isProd),
-  publicUrl: str('PUBLIC_URL', '').replace(/\/+$/, ''),
+  /* Replit'da proxy konteyner tashqarisida (loopback emas), shuning uchun
+     bitta "hop"ga ishonamiz — bu yerda konteynerga BOSHQA yo'l yo'q. */
+  trustProxy: str('TRUST_PROXY', isReplit ? '1' : (isProd ? 'loopback' : '')),
+  requireHttps: bool('REQUIRE_HTTPS', isProd || isReplit),
+  /* Replit domeni avtomatik olinadi — PUBLIC_URL yozish shart emas */
+  publicUrl: str('PUBLIC_URL', replitDomain ? 'https://' + replitDomain : '').replace(/\/+$/, ''),
 
   /* --- Telegram --- */
   botToken: str('BOT_TOKEN'),
@@ -124,6 +146,20 @@ const config = {
   digestHour: num('DIGEST_HOUR', 9, { min: 0, max: 23 }),                    // kunlik xulosa soati (mahalliy vaqt)
   tzOffsetHours: num('TZ_OFFSET_HOURS', 5, { min: -12, max: 14, int: false }),             // O'zbekiston: UTC+5
   notifyUserOnProgress: bool('NOTIFY_USER_ON_PROGRESS', true),
+
+  /* --- Doimiy saqlash (Replit App Storage) ---
+     replit | local | off. Replit'da fayl tizimi saqlanmaydi, shuning uchun
+     baza nusxasi tashqi xotirada turadi va ishga tushishda tiklanadi. */
+  storageMode: str('STORAGE_MODE', isReplit ? 'replit' : 'off').toLowerCase(),
+  storageDir: str('STORAGE_DIR', ''),
+  snapshotMinutes: num('SNAPSHOT_MINUTES', 2, { min: 1, max: 1440 }),
+
+  /* --- Avtomatik zaxira (Telegram orqali) ---
+     Replit kabi muhitlarda nashr qilingan ilovaning fayl tizimi saqlanmaydi,
+     shuning uchun baza nusxasi dekanat chatiga fayl sifatida yuboriladi. */
+  backupToTelegram: bool('BACKUP_TO_TELEGRAM', isReplit),
+  backupHours: num('BACKUP_HOURS', 24, { min: 1, max: 720 }),
+  backupChatId: num('BACKUP_CHAT_ID', 0, { min: -1e15, max: 1e15 }),
 
   /* --- Ma'lumotlar --- */
   dataDir,
@@ -187,12 +223,30 @@ function validate() {
   }
 
   if (isProd && !config.requireHttps) warn.push('REQUIRE_HTTPS o\'chirilgan — admin panel faqat HTTPS orqali ishlatilishi kerak.');
-  if (config.trustProxy === '1' || config.trustProxy === '2') {
+  if ((config.trustProxy === '1' || config.trustProxy === '2') && !isReplit) {
     warn.push('TRUST_PROXY raqam bilan berilgan — mijoz X-Forwarded-For/Proto\'ni soxtalashtirishi mumkin. ' +
       'Bir mashinadagi nginx uchun TRUST_PROXY=loopback, boshqa serverdagi proksi uchun uning IP manzilini yozing.');
   }
-  if (isProd && config.host === '0.0.0.0' && !bool('ALLOW_PUBLIC_BIND', false)) {
+  if (isProd && config.host === '0.0.0.0' && !isReplit && !bool('ALLOW_PUBLIC_BIND', false)) {
     warn.push('HOST=0.0.0.0 — panel barcha tarmoq interfeyslarida ochiq. Nginx ortida ishlatsangiz HOST=127.0.0.1 qiling.');
+  }
+  if (!['replit', 'local', 'off'].includes(config.storageMode)) {
+    fatal.push('STORAGE_MODE faqat "replit", "local" yoki "off" bo\'lishi mumkin.');
+  }
+  if (config.backupToTelegram && !config.backupChatId && !config.notifyChatIds.length) {
+    warn.push('Avtomatik zaxira yoqilgan, lekin chat ko\'rsatilmagan — NOTIFY_CHAT_IDS yoki BACKUP_CHAT_ID qo\'shing.');
+  }
+  if (isReplit) {
+    if (!config.publicUrl) {
+      warn.push('Replit domeni aniqlanmadi — webhook rejimi uchun PUBLIC_URL ni Secrets\'ga qo\'lda qo\'shing.');
+    }
+    if (config.botMode === 'webhook' && !config.publicUrl.startsWith('https://')) {
+      fatal.push('Replit\'da webhook uchun PUBLIC_URL https:// bilan boshlanishi kerak.');
+    }
+    if (!config.backupToTelegram) {
+      warn.push('DIQQAT: Replit\'da nashr qilingan ilovaning fayl tizimi saqlanmaydi. ' +
+        'BACKUP_TO_TELEGRAM=true qilib, NOTIFY_CHAT_IDS ko\'rsating — aks holda har nashrda murojaatlar yo\'qoladi.');
+    }
   }
   if (!config.notifyChatIds.length) warn.push('NOTIFY_CHAT_IDS bo\'sh — yangi murojaat haqida Telegram xabarnomasi yuborilmaydi.');
   if (config.appealMaxLength > 3800) warn.push('APPEAL_MAX_LENGTH juda katta — Telegram xabari 4096 belgidan oshmaydi.');

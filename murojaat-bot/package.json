@@ -12,7 +12,9 @@
     "webhook": "node scripts/webhook.js",
     "backup": "node scripts/backup.js",
     "test": "node test/smoke.js",
-    "reset-password": "node scripts/reset-password.js"
+    "reset-password": "node scripts/reset-password.js",
+    "replit-secrets": "node scripts/replit-secrets.js",
+    "restore": "node scripts/restore.js"
   },
   "engines": {
     "node": ">=20"

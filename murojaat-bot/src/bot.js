@@ -4,7 +4,11 @@
    Kategoriya yo'q: foydalanuvchi nimani xohlasa, shuni yozadi.
    Har bir murojaat raqam oladi va admin panelga tushadi.
    ===================================================================== */
-const { Bot, GrammyError, HttpError, Keyboard, InlineKeyboard } = require('grammy');
+const { Bot, GrammyError, HttpError, Keyboard, InlineKeyboard, InputFile } = require('grammy');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const zlib = require('zlib');
 const { config } = require('./config');
 const db = require('./db');
 const log = require('./logger');
@@ -371,7 +375,7 @@ async function finishAlbum(ctx, key) {
 }
 
 bot.on(['message:photo', 'message:document', 'message:voice', 'message:audio', 'message:video', 'message:video_note'], async (ctx) => {
-  if (ctx.state?.isOfficeChat && (ctx.message.reply_to_message || /^\/(javob|statistika)\b/i.test(ctx.message.caption || ''))) {
+  if (ctx.state?.isOfficeChat && (ctx.message.reply_to_message || /^\/(javob|statistika|zaxira)\b/i.test(ctx.message.caption || ''))) {
     const result = await handleOfficeReply(ctx);
     if (result?.handled) return;
     if (ctx.chat.type !== 'private') return;
@@ -426,7 +430,7 @@ bot.on('message:text', async (ctx) => {
 
   /* Xizmat chati (guruh YOKI dekanning shaxsiy chati): xabarnomaga "reply"
      va /javob, /statistika buyruqlari murojaat emas — dekanat amallari (bot-01). */
-  if (ctx.state?.isOfficeChat && (ctx.message.reply_to_message || /^\/(javob|statistika)\b/i.test(raw.trim()))) {
+  if (ctx.state?.isOfficeChat && (ctx.message.reply_to_message || /^\/(javob|statistika|zaxira)\b/i.test(raw.trim()))) {
     const result = await handleOfficeReply(ctx);
     if (result?.handled) return;
     /* Dekanat amali emas ekan — shaxsiy chat bo'lsa, odatdagi murojaat oqimi davom etadi */
@@ -592,6 +596,14 @@ async function handleOfficeReply(ctx) {
   if (/^\/javob\b/i.test(text.trim())) {
     await ctx.reply(`Foydalanish: <code>/javob MR-${new Date().getFullYear()}-0007 javob matni</code>\n` +
       'Yoki murojaat xabarnomasiga «reply» qilib yozing.', { parse_mode: 'HTML' });
+    return { handled: true };
+  }
+
+  /* /zaxira — bazaning nusxasini hoziroq yuborish */
+  if (/^\/zaxira(?:@[A-Za-z0-9_]+)?\b/i.test(text.trim())) {
+    await ctx.reply('💾 Zaxira tayyorlanmoqda…');
+    const result = await sendBackupToTelegram({ force: true });
+    if (!result.sent) await ctx.reply(`⚠️ Zaxira yuborilmadi: ${escapeHtml(result.error || result.reason)}`, { parse_mode: 'HTML' });
     return { handled: true };
   }
 
@@ -820,6 +832,55 @@ async function sendDailyDigest({ force = false } = {}) {
   return { sent: sent > 0, overdue: stats.overdue };
 }
 
+/* =====================================================================
+   AVTOMATIK ZAXIRA — bazani Telegram'ga fayl qilib yuborish.
+
+   Replit kabi platformalarda nashr qilingan ilovaning fayl tizimi
+   SAQLANMAYDI (har "Publish"da tozalanadi). Telegram esa yuborilgan
+   faylni cheksiz saqlaydi — shuning uchun zaxira dekanat chatiga
+   hujjat sifatida yuboriladi. Tiklash:  npm run restore -- <fayl>
+   ===================================================================== */
+async function sendBackupToTelegram({ force = false } = {}) {
+  if (!config.backupToTelegram && !force) return { sent: false, reason: 'o\'chirilgan' };
+
+  const chatId = config.backupChatId || config.notifyChatIds[0];
+  if (!chatId) return { sent: false, reason: 'chat ko\'rsatilmagan' };
+
+  const last = Number(db.getSetting('last_backup_at', 0));
+  if (!force && Date.now() - last < config.backupHours * 3600_000) {
+    return { sent: false, reason: 'vaqti emas' };
+  }
+
+  const stamp = new Date(Date.now() + config.tzOffsetHours * 3600_000).toISOString().replace(/[:T]/g, '-').slice(0, 16);
+  const tmpFile = path.join(os.tmpdir(), `murojaat-${stamp}.db`);
+
+  try {
+    await db.backupTo(tmpFile);
+    const packed = zlib.gzipSync(fs.readFileSync(tmpFile), { level: 9 });
+    const stats = db.stats(config.slaHours * 3600_000);
+    const sizeMb = (packed.length / 1024 / 1024).toFixed(2);
+
+    await bot.api.sendDocument(chatId, new InputFile(packed, `murojaat-${stamp}.db.gz`), {
+      caption: `💾 <b>Zaxira nusxa</b> — ${stamp.replace(/-/g, ':').slice(0, 10)}\n` +
+        `Murojaatlar: <b>${stats.total}</b> · Javob berilgan: ${stats.answered} · Hajm: ${sizeMb} MB\n\n` +
+        `<i>Bu faylni o'chirmang. Tiklash kerak bo'lsa yuklab olib:</i>\n` +
+        `<code>npm run restore -- murojaat-${stamp}.db.gz</code>`,
+      parse_mode: 'HTML',
+      disable_notification: true,
+    });
+
+    db.setSetting('last_backup_at', Date.now());
+    log.info(`zaxira yuborildi (${stats.total} murojaat, ${sizeMb} MB)`);
+    return { sent: true, appeals: stats.total, sizeMb };
+  } catch (err) {
+    const reason = err instanceof GrammyError ? err.description : String(err.message);
+    log.error('zaxira yuborilmadi', { error: reason });
+    return { sent: false, error: reason };
+  } finally {
+    try { fs.unlinkSync(tmpFile); } catch { /* yo'q bo'lsa — muhim emas */ }
+  }
+}
+
 /** Fayl havolasini olish (admin panel yuklab olishi uchun; token serverda qoladi) */
 async function getFilePath(fileId) {
   const file = await bot.api.getFile(fileId);
@@ -848,5 +909,5 @@ async function setMyCommands() {
 
 module.exports = {
   bot, deliverReply, notifyOffice, notifyAuthorInProgress, sendDailyDigest,
-  getFilePath, setMyCommands, STATUS_LABEL,
+  sendBackupToTelegram, getFilePath, setMyCommands, STATUS_LABEL,
 };

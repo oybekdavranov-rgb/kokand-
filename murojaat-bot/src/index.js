@@ -12,35 +12,67 @@ for (const message of warn) log.warn('sozlama: ' + message);
 if (fatal.length) {
   console.error('\n  ⛔️ Sozlamalarda xato — server ishga tushmadi:\n');
   for (const message of fatal) console.error('   • ' + message);
-  console.error('\n  Yordam:  npm run setup  (kalitlarni yaratib, .env namunasini chiqaradi)\n');
+  console.error('\n  Yordam:  npm run setup  (kalitlarni yaratib, .env namunasini chiqaradi)');
+  console.error('  Replit uchun:  npm run replit-secrets -- "Parolingiz"\n');
   process.exit(1);
 }
 
-const db = require('./db');
-const { bot, setMyCommands, sendDailyDigest } = require('./bot');
-const { createApp } = require('./server');
+/* Doimiy saqlash moduli bazaga TEGMAYDI — uni bazadan oldin yuklash mumkin */
+const storage = require('./storage');
+
+/* Quyidagilar bazani ochadi, shuning uchun tiklashdan KEYIN yuklanadi */
+let db = null;
+let bot = null;
+let setMyCommands = null;
+let sendDailyDigest = null;
+let sendBackupToTelegram = null;
+let createApp = null;
 
 let server;
 let shuttingDown = false;
 
 async function main() {
-  /* --- 2. Birinchi ishga tushishda admin (owner) hisobini yaratish --- */
+  /* --- 2. Replit kabi muhitlarda: saqlangan bazani tiklaymiz --- */
+  await storage.restoreIfMissing();
+
+  db = require('./db');
+  ({ bot, setMyCommands, sendDailyDigest, sendBackupToTelegram } = require('./bot'));
+  ({ createApp } = require('./server'));
+
+  /* --- 3. Birinchi ishga tushishda admin (owner) hisobini yaratish --- */
   const owner = db.ensureOwner();
   if (owner) log.info(`admin hisobi yaratildi: "${owner.username}" (owner)`);
   db.purgeOld();
 
   /* Har 6 soatda eski sessiya/urinishlarni tozalash */
-  const cleanup = setInterval(() => { try { db.purgeOld(); } catch (err) { log.warn('tozalash xatosi', { error: String(err.message) }); } }, 6 * 3600_000);
+  const cleanup = setInterval(() => {
+    try { db.purgeOld(); } catch (err) { log.warn('tozalash xatosi', { error: String(err.message) }); }
+  }, 6 * 3600_000);
   cleanup.unref();
 
-  /* Kunlik xulosa: har 20 daqiqada tekshiramiz, belgilangan soatda bir marta yuboriladi.
-     (Alohida cron kerak emas — xizmat ishlab tursa, o'zi yuboradi.) */
+  /* Kunlik xulosa va Telegram zaxirasi: har 20 daqiqada tekshiriladi */
   const digest = setInterval(() => {
     sendDailyDigest().catch((err) => log.warn('kunlik xulosa xatosi', { error: String(err.message) }));
+    sendBackupToTelegram().catch((err) => log.warn('zaxira xatosi', { error: String(err.message) }));
   }, 20 * 60_000);
   digest.unref();
 
-  /* --- 3. Web server (admin panel + webhook) --- */
+  if (config.backupToTelegram) {
+    const firstBackup = setTimeout(() => {
+      sendBackupToTelegram().catch((err) => log.warn('zaxira xatosi', { error: String(err.message) }));
+    }, 2 * 60_000);
+    firstBackup.unref();
+  }
+
+  /* Doimiy saqlash: o'zgarish bo'lsa nusxani yangilab turamiz */
+  if (storage.isEnabled()) {
+    const sync = setInterval(() => {
+      storage.snapshot('interval').catch((err) => log.warn('nusxa xatosi', { error: String(err.message) }));
+    }, config.snapshotMinutes * 60_000);
+    sync.unref();
+  }
+
+  /* --- 4. Web server (admin panel + webhook) --- */
   const app = createApp();
   server = http.createServer(app);
   server.headersTimeout = 20_000;
@@ -50,9 +82,8 @@ async function main() {
     server.listen(config.port, config.host, resolve);
   });
 
-  /* --- 4. Telegram bot --- */
+  /* --- 5. Telegram bot --- */
   if (config.botMode === 'polling') {
-    /* bot.start() uzluksiz ishlaydi — kutib qolmaymiz */
     bot.start({
       drop_pending_updates: false,
       allowed_updates: ['message', 'callback_query'],
@@ -72,21 +103,45 @@ async function main() {
   const where = config.publicUrl || `http://${config.host === '0.0.0.0' ? 'localhost' : config.host}:${config.port}`;
   log.info('admin panel: ' + where);
   log.info(`rejim: ${config.nodeEnv} · ma'lumot: ${config.dbFile}`);
+  if (config.isReplit) log.info('muhit: Replit' + (storage.isEnabled() ? ' (doimiy saqlash yoqilgan)' : ' ⚠️ doimiy saqlash YO\'Q'));
   if (config.botMode === 'webhook') log.info('webhook: ' + (config.webhookUrl || '(PUBLIC_URL yo\'q)') + '  — "npm run webhook set" bilan ro\'yxatdan o\'tkazing');
 }
 
 /* =====================================================================
    XAVFSIZ TO'XTASH
+   Replit'da to'xtash = konteyner yo'qolishi bo'lishi mumkin, shuning uchun
+   chiqishdan oldin bazani saqlab qolishga ulguramiz.
    ===================================================================== */
 async function shutdown(signal) {
   if (shuttingDown) return;
   shuttingDown = true;
   log.info(`${signal} — to'xtatilmoqda…`);
-  const timer = setTimeout(() => process.exit(1), 10_000);
+  const timer = setTimeout(() => process.exit(1), 20_000);
   timer.unref();
-  try { if (config.botMode === 'polling') await bot.stop(); } catch (err) { log.warn('botni to\'xtatishda xato', { error: String(err.message) }); }
+
+  try { if (config.botMode === 'polling' && bot) await bot.stop(); }
+  catch (err) { log.warn('botni to\'xtatishda xato', { error: String(err.message) }); }
+
   try { if (server) await new Promise((resolve) => server.close(resolve)); } catch { /* yopilgan */ }
-  try { db.close(); } catch { /* yopilgan */ }
+
+  /* Oxirgi nusxani tashqi xotiraga saqlaymiz (eng muhim qadam) */
+  if (db && storage.isEnabled()) {
+    try { await storage.snapshot('shutdown'); }
+    catch (err) { log.error('oxirgi nusxa saqlanmadi', { error: String(err.message) }); }
+  }
+
+  /* Telegram'ga ham yuboramiz — ofsayt (tashqi) nusxa sifatida */
+  if (db && config.backupToTelegram && signal !== 'uncaughtException') {
+    try {
+      const result = await Promise.race([
+        sendBackupToTelegram({ force: true }),
+        new Promise((resolve) => setTimeout(() => resolve({ sent: false, reason: 'vaqt tugadi' }), 8_000)),
+      ]);
+      log.info('to\'xtashdan oldingi zaxira: ' + (result.sent ? 'yuborildi' : result.reason || result.error));
+    } catch (err) { log.warn('to\'xtashdan oldingi zaxira xatosi', { error: String(err.message) }); }
+  }
+
+  try { if (db) db.close(); } catch { /* yopilgan */ }
   log.info('to\'xtadi.');
   process.exit(0);
 }

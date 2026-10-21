@@ -5,7 +5,22 @@
    ===================================================================== */
 const fs = require('fs');
 const path = require('path');
-const Database = require('better-sqlite3');
+/* better-sqlite3 — "native" modul: o'rnatishda kompilyatsiya qilinadi.
+   Agar muhit mos kelmasa, xato tushunarsiz bo'ladi — shuning uchun aniq
+   ko'rsatma beramiz (Replit, Docker va eski Node versiyalarida uchraydi). */
+let Database;
+try {
+  Database = require('better-sqlite3');
+} catch (err) {
+  console.error('\n  ⛔️ Ma\'lumotlar bazasi moduli (better-sqlite3) yuklanmadi.\n');
+  console.error('  Sabab: ' + String(err.message).split('\n')[0]);
+  console.error('\n  Yechim (shu papkada ketma-ket bajaring):');
+  console.error('    npm rebuild better-sqlite3 --build-from-source');
+  console.error('  Agar yordam bermasa:');
+  console.error('    rm -rf node_modules package-lock.json && npm install\n');
+  console.error('  Node versiyasi: ' + process.version + ' (kamida v20 kerak)\n');
+  process.exit(1);
+}
 const { config } = require('./config');
 const { hashPassword, sha256, randomToken } = require('./security');
 
@@ -592,10 +607,20 @@ function purgeOld() {
   purgeSessions();
 }
 
+/** Baza versiyasi — o'zgarish bo'ldimi yo'qmi, shu bilan bilinadi */
+const dataVersion = () => db.pragma('data_version', { simple: true });
+
+/** Ishlab turgan bazaning xavfsiz ("issiq") nusxasi — SQLite backup API */
+async function backupTo(targetPath) {
+  await db.backup(targetPath);
+  try { fs.chmodSync(targetPath, 0o600); } catch { /* muhim emas */ }
+  return targetPath;
+}
+
 function close() { try { db.close(); } catch { /* allaqachon yopilgan */ } }
 
 module.exports = {
-  db, STATUSES, lockDownFiles,
+  db, STATUSES, lockDownFiles, backupTo, dataVersion,
   getSetting, setSetting,
   upsertUser, getUser, setUserPhone, setUserBlocked, listUsers,
   createAppeal, getAppeal, getAppealByCode, getRecentAppealOfUser, listUserAppeals,

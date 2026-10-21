@@ -1,0 +1,25 @@
+# =====================================================================
+#  Replit konfiguratsiyasi — qo'llanma: REPLIT.md
+#  Maxfiy qiymatlar BU YERGA YOZILMAYDI — faqat 🔒 Secrets bo'limiga.
+# =====================================================================
+
+modules = ["nodejs-22"]          # better-sqlite3 tayyor binary'si shu versiyada bor
+entrypoint = "src/index.js"
+hidden = ["node_modules", "data", ".env"]
+
+# --- Workspace: "Run" tugmasi ---
+# exec — signal (SIGTERM) to'g'ridan Node'ga yetib borsin, aks holda
+# to'xtashdan oldingi zaxira saqlanmay qoladi.
+run = ["sh", "-c", "exec node src/index.js"]
+
+# --- Publish (Deployment) ---
+# App Storage moduli faqat Replit'da kerak, shuning uchun u bog'liqliklar
+# ro'yxatida emas — build paytida o'rnatiladi. O'rnatilmasa ham ilova
+# ishlaydi (lekin ma'lumot himoyalanmaydi — logda ogohlantirish chiqadi).
+[deployment]
+build = ["sh", "-c", "npm ci && (npm i --no-save @replit/object-storage || echo 'DIQQAT: App Storage moduli o-rnatilmadi')"]
+run = ["sh", "-c", "exec node src/index.js"]
+
+# [[ports]] QO'LDA YOZILMAYDI: yozilsa avtomatik port aniqlash o'chadi va
+# localPort ilova porti bilan aynan mos kelmasa nashr yiqiladi.
+# Ilova PORT environment o'zgaruvchisini o'zi o'qiydi (src/config.js).
