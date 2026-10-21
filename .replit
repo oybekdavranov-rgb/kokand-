@@ -1,0 +1,23 @@
+# =====================================================================
+#  Replit konfiguratsiyasi — MUROJAAT BOTI uchun
+#
+#  Bu repozitoriyada ikkita ilova bor:
+#    murojaat-bot/  — Telegram murojaat boti + admin panel  ← Replit shuni ishga tushiradi
+#    /              — tashkiliy tuzilma sayti (alohida, Replitga kiritilmagan)
+#
+#  To'liq qo'llanma: murojaat-bot/REPLIT.md
+# =====================================================================
+
+modules = ["nodejs-22"]          # better-sqlite3 tayyor binary'si shu versiyada bor
+entrypoint = "murojaat-bot/src/index.js"
+hidden = ["node_modules", "murojaat-bot/node_modules", "murojaat-bot/data", ".env"]
+
+# --- Workspace: "Run" tugmasi ---
+run = ["sh", "-c", "cd murojaat-bot && exec node src/index.js"]
+
+# --- Publish (Deployment) ---
+[deployment]
+build = ["sh", "-c", "cd murojaat-bot && npm ci && (npm i --no-save @replit/object-storage || echo 'DIQQAT: App Storage moduli o-rnatilmadi')"]
+run = ["sh", "-c", "cd murojaat-bot && exec node src/index.js"]
+
+# [[ports]] QO'LDA YOZILMAYDI — avtomatik port aniqlash ishlaydi.

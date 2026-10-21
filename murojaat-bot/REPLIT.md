@@ -32,13 +32,17 @@ Shuning uchun bot ikki qavat himoya bilan keladi:
 
 1. [replit.com](https://replit.com) ga kiring.
 2. **Create App** → **Import from GitHub** → repozitoriya havolasini qo'ying.
-   Tezroq yo'l: `https://replit.com/github/<foydalanuvchi>/<repo>` havolasini oching.
-3. Agar repo ichida bot alohida papkada bo'lsa (`murojaat-bot/`), App ildizi
-   shu papka bo'lishi kerak — aks holda `.replit` fayli topilmaydi.
-   (Arxivdan yuklasangiz: **Upload folder** → `murojaat-bot` papkasini tanlang.)
+   Bir bosishli yo'l: `https://replit.com/github/<foydalanuvchi>/<repo>`
+3. Arxivdan yuklayotgan bo'lsangiz: **Upload folder** → `murojaat-bot` papkasi.
 
-Loyihada `.replit` fayli bor — Replit Node 22 ni va ishga tushirish buyrug'ini
-undan o'qiydi, qo'lda sozlash shart emas.
+Ikkala holatda ham sozlash shart emas: repozitoriya ildizidagi `.replit` fayli
+Replit'ni `murojaat-bot/` papkasiga yo'naltiradi va Node 22 ni tanlaydi.
+
+> Quyidagi buyruqlarni **Shell**da bajarganda, avval kerakli papkaga o'ting:
+> ```bash
+> cd murojaat-bot
+> ```
+> (Agar faqat `murojaat-bot` papkasini yuklagan bo'lsangiz, bu shart emas.)
 
 ---
 
