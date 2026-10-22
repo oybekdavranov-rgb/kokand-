@@ -7,6 +7,10 @@ qabulxonasi uchun Telegram bot.
 > **to'g'ridan-to'g'ri dekanatning Telegram chatiga** yuboradi. Dekan o'sha xabarga
 > «reply» qilib javob yozadi — javob fuqaroga yetib boradi.
 > **Web-panel, login va parol yo'q** — hamma ish Telegram ichida.
+>
+> Boshqaruv ham Telegram ichida: **`/panel`** — tugmalar bilan ishlaydigan
+> dekanat paneli (murojaatlar ro'yxati, qidirish, holatlar, bloklash, zaxira).
+> Adminlar **Telegram ID** orqali qo'shiladi — panelning o'zidan, fayl tahrirlamasdan.
 
 ```
   Fuqaro                      Bot                      Dekanat (Telegram)
@@ -95,6 +99,7 @@ Javob berish: shu xabarga «reply» qilib yozing
 
 | Nima qilasiz | Qanday |
 |---|---|
+| Boshqaruv paneli | `/panel` — tugmalar bilan (4-bo'lim) |
 | Javob berish | xabarga **«reply»** qilib yozasiz |
 | Javob berish (reply'siz) | `/javob MR-2026-0007 javob matni` |
 | Javobga hujjat/rasm ilova qilish | kartaga «reply» qilib faylni yuborasiz (izoh bilan yoki izohsiz) — fayl fuqaroga ham boradi |
@@ -120,7 +125,64 @@ Javob berish: shu xabarga «reply» qilib yozing
 
 ---
 
-## 4. Joylashtirish
+## 4. Panel (`/panel`) — Telegram ichidagi boshqaruv
+
+Dekanat xodimi botga `/panel` yozadi va hamma narsa tugmalarda bo'ladi:
+
+```
+🏛 Dekanat paneli
+Qo'qon universiteti Ta'lim fakulteti
+
+🆕 Yangi: 3   ⏳ Ko'rilmoqda: 1
+✅ Javob berilgan: 12   🔒 Yopilgan: 4
+⚠️ Kechikkan (48 soat+): 1   📨 24 soatda: 5
+
+Siz: 👑 egasi · 123456789
+
+[🆕 Yangi (3)]        [⏳ Ko'rilmoqda (1)]
+[📋 Hammasi]          [⚠️ Kechikkanlar (1)]
+[🔍 Qidirish]         [⛔️ Bloklanganlar]
+[🔔 Xabarnoma: yoniq]
+[👥 Adminlar]         [💾 Zaxira]
+[📜 Jurnal]
+```
+
+| Tugma | Nima qiladi |
+|---|---|
+| 🆕 / ⏳ / 📋 | murojaatlarni holat bo'yicha sahifalab ko'rsatadi |
+| Murojaat kartasi | to'liq matn, muallif, fayllar soni, oxirgi javob |
+| ✍️ Javob yozish | bot so'raydi, siz javobni yozasiz — fuqaroga boradi (fayl ham mumkin) |
+| ⏳ / 🔒 | holatni o'zgartirish (fuqaroga xabar beriladi) |
+| 📎 Fayllar | murojaat ilovalarini qaytadan yuborish |
+| ⛔️ Bloklash | suiiste'molchini to'xtatish (va qaytarish) |
+| 🔍 Qidirish | raqam, Telegram ID, username yoki matn bo'yicha |
+| 🔔 Xabarnoma | yangi murojaat shaxsiy chatingizga ham kelsinmi |
+| 💾 Zaxira | bazani shaxsiy chatga yuborish *(faqat egasi)* |
+| 📜 Jurnal | kim nima qilgani *(faqat egasi)* |
+
+### Adminlarni ID orqali qo'shish
+
+`👥 Adminlar` → `➕ ID bilan admin qo'shish` → yangi xodimning **Telegram ID**'sini
+yuborasiz (ID'ni [@userinfobot](https://t.me/userinfobot) beradi). Shundan keyin u
+botga `/panel` yozib ishlay oladi — `.env` ni tahrirlash, serverni qayta ishga
+tushirish **shart emas**.
+
+Ikki daraja bor:
+
+| Daraja | Imkoniyati |
+|---|---|
+| 👑 **egasi** (owner) | hammasi: adminlarni qo'shish/olib tashlash, zaxira, jurnal |
+| 👤 **admin** | murojaatlar: javob, holat, qidirish, bloklash |
+
+- `.env` dagi `ADMIN_USER_IDS` — **doimiy egalar**. Ularni paneldan o'chirib
+  bo'lmaydi; `.env` dan olib tashlansa — panel ro'yxatidan ham avtomatik chiqadi.
+- Har bir tugma bosilganda huquq **qaytadan** tekshiriladi: huquqi olingan odam
+  eski xabardagi tugmani bosib ham hech narsa qila olmaydi.
+- Kim kimni admin qilgani, kim holatni o'zgartirgani — `📜 Jurnal`da qoladi.
+
+---
+
+## 5. Joylashtirish
 
 ### A. VPS (tavsiya etiladi — polling rejimi, nginx kerak emas)
 
@@ -160,14 +222,14 @@ Oddiy hollarda **polling yetarli va soddaroq**.
 
 ---
 
-## 5. Sozlamalar
+## 6. Sozlamalar
 
 Barchasi `.env.example` da izohlari bilan. Eng muhimlari:
 
 | O'zgaruvchi | Vazifasi |
 |---|---|
 | `BOT_TOKEN` | Telegram bot tokeni (maxfiy!) |
-| `ADMIN_CHAT_IDS` | murojaatlar shu chat(lar)ga boradi |
+| `ADMIN_CHAT_IDS` | murojaatlar shu chat(lar)ga boradi (adminlar xabarnomani yoqsa — ixtiyoriy) |
 | `ADMIN_USER_IDS` | kim javob bera oladi (guruh ishlatilsa — **majburiy**) |
 | `BOT_MODE` | `polling` yoki `webhook` |
 | `APPEALS_PER_HOUR` / `APPEALS_PER_DAY` | spam chegaralari |
@@ -180,14 +242,20 @@ Barchasi `.env.example` da izohlari bilan. Eng muhimlari:
 
 ---
 
-## 6. Xavfsizlik
+## 7. Xavfsizlik
 
 - Bot tokeni va boshqa maxfiy qiymatlar faqat environment'da; logga tushmaydi.
 - Murojaat matni boshqaruv belgilaridan tozalanadi va HTML qochiriladi —
   Telegram razmetkasini buzish yoki in'ektsiya qilish mumkin emas.
 - Barcha SQL so'rovlar prepared statement (SQL injection imkonsiz).
 - Admin amallari ikki qavat tekshiriladi: **chat** (`ADMIN_CHAT_IDS`) va
-  **odam** (`ADMIN_USER_IDS`). Begona chat yoki begona odam — rad etiladi.
+  **odam** (`ADMIN_USER_IDS` yoki panel orqali qo'shilgan admin). Begona chat
+  yoki begona odam — rad etiladi.
+- Panel huquqi har bir tugma bosilganda qayta tekshiriladi; «egasi» amallari
+  (adminlar, zaxira, jurnal) oddiy adminga berilmaydi.
+- `.env` dagi egalar ro'yxati hokim: undan chiqarilgan odam panel ro'yxatidan ham
+  avtomatik o'chadi.
+- Adminlar bilan bog'liq har bir amal jurnalga yoziladi (kim, kimga, qachon).
 - Fuqaro boshqa odamning murojaatini raqam bilan ham ko'ra olmaydi.
 - Faqat **o'z** telefon raqamini ulashish mumkin.
 - Webhook ikki qavat himoyada: maxfiy yo'l + Telegram maxfiy sarlavhasi
@@ -198,7 +266,7 @@ Barchasi `.env.example` da izohlari bilan. Eng muhimlari:
 
 ---
 
-## 7. Zaxira va tiklash
+## 8. Zaxira va tiklash
 
 Bot har kuni (va `/zaxira` buyrug'i bilan) bazani **shaxsiy** chatga yuboradi.
 Bu fayllarni o'chirmang — ular sizning zaxirangiz.
@@ -218,19 +286,19 @@ yozishmalar Telegram'da saqlanib turadi.
 
 ---
 
-## 8. Buyruqlar
+## 9. Buyruqlar
 
 | Buyruq | Vazifasi |
 |---|---|
 | `npm start` | botni ishga tushirish |
-| `npm test` | uchdan-uchiga tekshiruv (117 test, Telegram'siz) |
+| `npm test` | uchdan-uchiga tekshiruv (153 test, Telegram'siz) |
 | `npm run backup` | bazaning zaxira nusxasi |
 | `npm run restore -- <fayl>` | zaxiradan tiklash |
 | `npm run webhook set\|info\|delete` | webhook boshqaruvi |
 
 ---
 
-## 9. Muammolar
+## 10. Muammolar
 
 | Belgi | Yechim |
 |---|---|
@@ -246,7 +314,7 @@ yozishmalar Telegram'da saqlanib turadi.
 
 ---
 
-## 10. Maxfiylik
+## 11. Maxfiylik
 
 Murojaat matni, ism, Telegram username/ID va (ulashsa) telefon raqami dekanat
 chatiga yuboriladi va serveringizdagi bazada saqlanadi. Boshqa hech kimga

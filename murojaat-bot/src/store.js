@@ -156,7 +156,35 @@ const MIGRATIONS = [
     /* Bitta murojaatga bitta fayl ikki marta yozilmasin (qayta yetkazilgan albom) */
     CREATE UNIQUE INDEX attachments_unique ON attachments(appeal_id, file_id);
   `),
+  /* Adminlar Telegram ID orqali qo'shiladi; panel shu jadvalga tayanadi */
+  () => db.exec(`
+    CREATE TABLE admins (
+      tg_id      INTEGER PRIMARY KEY,
+      role       TEXT    NOT NULL DEFAULT 'admin',    /* owner | admin */
+      name       TEXT,
+      username   TEXT,
+      notify     INTEGER NOT NULL DEFAULT 0,          /* yangi murojaat shaxsiy chatga kelsinmi */
+      note       TEXT,
+      added_by   INTEGER,
+      added_at   INTEGER NOT NULL,
+      last_seen  INTEGER
+    );
+
+    /* Kim kimni admin qildi, kim nimani o'zgartirdi — izsiz qolmaydi */
+    CREATE TABLE admin_log (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      actor_id   INTEGER NOT NULL,
+      action     TEXT    NOT NULL,
+      target_id  INTEGER,
+      detail     TEXT,
+      created_at INTEGER NOT NULL
+    );
+    CREATE INDEX admin_log_time ON admin_log(created_at DESC);
+  `),
 ];
+
+/* DIQQAT: yangi migratsiya FAQAT ro'yxat oxiriga qo'shiladi — o'rtaga qo'yilsa
+   ishlab turgan bazalarda tartib buziladi (user_version indeks bo'yicha yuradi). */
 
 (function migrate() {
   const current = db.pragma('user_version', { simple: true });
@@ -207,6 +235,46 @@ const setUserPhone = (tgId, phone) => qSetPhone.run(phone, tgId);
 const setUserBlocked = (tgId, blocked, reason = null) =>
   qSetBlocked.run(blocked ? 1 : 0, blocked ? reason : null, blocked ? now() : null, tgId);
 const listBlocked = (limit = 20) => qListBlocked.all(limit);
+
+/* -------------------------- Adminlar (panel) ------------------------ */
+const qUpsertAdmin = db.prepare(`
+  INSERT INTO admins (tg_id, role, name, username, notify, note, added_by, added_at)
+  VALUES (@tg_id, @role, @name, @username, @notify, @note, @added_by, @ts)
+  ON CONFLICT(tg_id) DO UPDATE SET
+    role = excluded.role,
+    name = COALESCE(excluded.name, admins.name),
+    username = COALESCE(excluded.username, admins.username),
+    note = COALESCE(excluded.note, admins.note)`);
+const qGetAdmin = db.prepare('SELECT * FROM admins WHERE tg_id = ?');
+const qListAdmins = db.prepare('SELECT * FROM admins ORDER BY (role = \'owner\') DESC, added_at LIMIT ?');
+const qDeleteAdmin = db.prepare('DELETE FROM admins WHERE tg_id = ?');
+const qCountRole = db.prepare('SELECT COUNT(*) AS n FROM admins WHERE role = ?');
+const qSetNotify = db.prepare('UPDATE admins SET notify = ? WHERE tg_id = ?');
+const qSetAdminRole = db.prepare('UPDATE admins SET role = ? WHERE tg_id = ?');
+const qTouchAdmin = db.prepare('UPDATE admins SET last_seen = ?, name = COALESCE(?, name), username = COALESCE(?, username) WHERE tg_id = ?');
+const qNotifyAdmins = db.prepare('SELECT * FROM admins WHERE notify = 1');
+
+const addAdmin = (tgId, { role = 'admin', name = null, username = null, notify = 0, note = null, addedBy = null } = {}) => {
+  qUpsertAdmin.run({
+    tg_id: tgId, role, name, username, notify: notify ? 1 : 0, note, added_by: addedBy, ts: now(),
+  });
+  return qGetAdmin.get(tgId);
+};
+const getAdmin = (tgId) => qGetAdmin.get(tgId);
+const listAdmins = (limit = 50) => qListAdmins.all(limit);
+const removeAdmin = (tgId) => qDeleteAdmin.run(tgId).changes > 0;
+const countAdminsByRole = (role) => qCountRole.get(role).n;
+const setAdminNotify = (tgId, on) => qSetNotify.run(on ? 1 : 0, tgId).changes > 0;
+const setAdminRole = (tgId, role) => qSetAdminRole.run(role, tgId).changes > 0;
+const touchAdmin = (tgId, name = null, username = null) => qTouchAdmin.run(now(), name, username, tgId);
+const listNotifyAdmins = () => qNotifyAdmins.all();
+
+const qAddAdminLog = db.prepare(`INSERT INTO admin_log (actor_id, action, target_id, detail, created_at)
+  VALUES (?, ?, ?, ?, ?)`);
+const qListAdminLog = db.prepare('SELECT * FROM admin_log ORDER BY created_at DESC LIMIT ?');
+const logAdminAction = (actorId, action, targetId = null, detail = null) =>
+  qAddAdminLog.run(actorId, String(action).slice(0, 40), targetId, detail ? String(detail).slice(0, 300) : null, now());
+const listAdminLog = (limit = 20) => qListAdminLog.all(limit);
 
 /* ----------------------------- Murojaatlar -------------------------- */
 const qInsertAppeal = db.prepare(`
@@ -288,6 +356,38 @@ const qOverdue = db.prepare(`
   SELECT * FROM appeals WHERE status IN ('new','in_progress') AND created_at < ?
   ORDER BY created_at LIMIT ?`);
 const listOverdue = (slaMs, limit = 10) => qOverdue.all(now() - slaMs, limit);
+
+/* Panel: holat bo'yicha ro'yxat (sahifalab) */
+const qListByStatus = db.prepare('SELECT * FROM appeals WHERE status = ? ORDER BY created_at DESC LIMIT ? OFFSET ?');
+const qListAll = db.prepare('SELECT * FROM appeals ORDER BY created_at DESC LIMIT ? OFFSET ?');
+const qCountByStatus = db.prepare('SELECT COUNT(*) AS n FROM appeals WHERE status = ?');
+const qCountAll = db.prepare('SELECT COUNT(*) AS n FROM appeals');
+
+function listAppeals({ status = null, limit = 5, offset = 0 } = {}) {
+  if (status && !STATUSES.includes(status)) throw new Error('Noto\'g\'ri status');
+  return status ? qListByStatus.all(status, limit, offset) : qListAll.all(limit, offset);
+}
+function countAppeals(status = null) {
+  if (status && !STATUSES.includes(status)) throw new Error('Noto\'g\'ri status');
+  return status ? qCountByStatus.get(status).n : qCountAll.get().n;
+}
+
+/* Panel: qidirish — raqam, Telegram ID, username yoki matn bo'yicha.
+   LIKE naqshi ESCAPE bilan: foydalanuvchi kiritgan % va _ oddiy belgi bo'ladi. */
+const qSearch = db.prepare(`
+  SELECT * FROM appeals
+  WHERE code LIKE @like ESCAPE '\\'
+     OR body LIKE @like ESCAPE '\\'
+     OR author_name LIKE @like ESCAPE '\\'
+     OR IFNULL(author_username, '') LIKE @like ESCAPE '\\'
+     OR CAST(tg_id AS TEXT) = @exact
+  ORDER BY created_at DESC LIMIT ?`);
+function searchAppeals(query, limit = 10) {
+  const text = String(query || '').trim();
+  if (!text) return [];
+  const escaped = text.replace(/[\\%_]/g, (ch) => '\\' + ch);
+  return qSearch.all({ like: '%' + escaped + '%', exact: text }, limit);
+}
 
 function stats(slaMs = 48 * 3600_000) {
   const base = db.prepare(`SELECT
@@ -429,7 +529,9 @@ module.exports = {
   upsertUser, getUser, setUserPhone, setUserBlocked, listBlocked,
   createAppeal, getAppeal, getAppealByCode, getRecentAppealOfUser, listUserAppeals,
   countAppealsSince, lastAppealAt, setAppealStatus, touchAppeal, setAppealPhone,
-  markProgressNotified, listOverdue, stats,
+  markProgressNotified, listOverdue, stats, listAppeals, countAppeals, searchAppeals,
+  addAdmin, getAdmin, listAdmins, removeAdmin, countAdminsByRole, setAdminNotify, setAdminRole,
+  touchAdmin, listNotifyAdmins, logAdminAction, listAdminLog,
   addAttachment, countAttachments, listAttachments,
   addPendingAttachment, takePendingAttachments, countPendingAttachments, prunePendingAttachments,
   addRoute, findRoute, listHeaderRoutes, listUndelivered,

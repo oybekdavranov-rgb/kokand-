@@ -38,6 +38,7 @@ const sent = [];         // sendMessage
 const documents = [];    // sendDocument
 const media = [];        // sendPhoto / sendVideo / ...
 const edits = [];        // editMessageText
+const callbacks = [];    // answerCallbackQuery
 const apiCalls = [];
 let messageId = 1000;
 let failChats = new Set();          // shu chatlarga yuborish 403 beradi
@@ -117,6 +118,9 @@ function mockApi() {
         case 'editMessageText':
           edits.push(body);
           return ok({ message_id: body.message_id, text: body.text });
+        case 'answerCallbackQuery':
+          callbacks.push(body);
+          return ok(true);
         default:
           return ok(true);
       }
@@ -128,11 +132,31 @@ function mockApi() {
 let BASE = '';
 let updateId = 1;
 
-const post = (pathname, payload, headers = {}) => fetch(BASE + pathname, {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json', ...headers },
-  body: JSON.stringify(payload),
-});
+/* Node'ning fetch'i keep-alive ulanishini qayta ishlatadi: uzoq tanaffusdan
+   keyin server uni yopib qo'ygan bo'lishi mumkin ("other side closed").
+   Shuning uchun bir marta qayta urinamiz. */
+async function post(pathname, payload, headers = {}) {
+  const options = {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...headers },
+    body: JSON.stringify(payload),
+  };
+  try {
+    return await fetch(BASE + pathname, options);
+  } catch (err) {
+    await sleep(150);
+    return fetch(BASE + pathname, options);
+  }
+}
+
+async function getJson(pathname) {
+  try {
+    return await (await fetch(BASE + pathname)).json();
+  } catch {
+    await sleep(150);
+    return (await fetch(BASE + pathname)).json();
+  }
+}
 
 const sendUpdate = (update, secret = WEBHOOK_SECRET) =>
   post(WEBHOOK_PATH, { update_id: updateId++, ...update }, { 'X-Telegram-Bot-Api-Secret-Token': secret });
@@ -167,6 +191,17 @@ const photoOf = (n) => ([
 ]);
 
 const adminCards = () => sent.filter((m) => String(m.chat_id) === String(ADMIN_CHAT) && String(m.text).includes('Murojaat'));
+
+/* Panel tugmasini bosish */
+let callbackId = 0;
+const pressButton = (data, from = { id: ADMIN_USER, first_name: 'Dekan', username: 'dekan' }, chat = { id: ADMIN_CHAT, type: 'supergroup' }, messageId = 7000) => sendUpdate({
+  callback_query: {
+    id: 'pcb-' + (++callbackId), from: { is_bot: false, ...from },
+    message: { message_id: messageId, date: 0, chat, text: 'panel' },
+    chat_instance: 'p', data,
+  },
+});
+const lastCallback = () => callbacks[callbacks.length - 1] || {};
 const toUser = (id) => sent.filter((m) => String(m.chat_id) === String(id));
 
 /* ============================== TEST ================================ */
@@ -197,6 +232,8 @@ const toUser = (id) => sent.filter((m) => String(m.chat_id) === String(id));
   const logs = [];
   child.stdout.on('data', (c) => logs.push(c.toString()));
   child.stderr.on('data', (c) => logs.push(c.toString()));
+  let botExit = null;
+  child.on('exit', (code, signal) => { botExit = { code, signal, at: new Date().toISOString() }; });
 
   const stop = async () => {
     child.kill('SIGTERM'); await sleep(400); child.kill('SIGKILL');
@@ -1014,6 +1051,239 @@ const toUser = (id) => sent.filter((m) => String(m.chat_id) === String(id));
         !/Sozlamalarda xato/.test(groupOk.out), groupOk.out.slice(-200));
     }
 
+    section('Panel: Telegram ichidagi boshqaruv');
+    check('bot jarayoni hamon ishlab turibdi', botExit === null, JSON.stringify(botExit));
+    let probeInfo = 'yo\'q';
+    try { probeInfo = JSON.stringify(await getJson('/healthz')); }
+    catch (err) { probeInfo = 'XATO: ' + String(err.message) + ' / ' + String(err.cause && err.cause.message); }
+    check('bot HTTP serveri javob beradi', probeInfo.includes('"ok":true'), probeInfo.slice(0, 200));
+    sent.length = 0; edits.length = 0; callbacks.length = 0;
+    await sendUpdate(adminMessage('/panel', { entities: [{ type: 'bot_command', offset: 0, length: 6 }] }));
+    await sleep(300);
+    const panelMenu = sent.find((m) => String(m.text).includes('Dekanat paneli'));
+    check('/panel bosh menyuni ochadi', !!panelMenu, JSON.stringify(sent.map((m) => String(m.text).slice(0, 40))).slice(0, 200));
+    check('menyuda statistika va tugmalar bor',
+      !!panelMenu && /Yangi:/.test(panelMenu.text) && JSON.stringify(panelMenu.reply_markup).includes('p:l:new:0'),
+      JSON.stringify(panelMenu && panelMenu.reply_markup).slice(0, 200));
+    check('egasiga adminlar va zaxira tugmalari ko\'rinadi',
+      !!panelMenu && JSON.stringify(panelMenu.reply_markup).includes('p:ad') &&
+      JSON.stringify(panelMenu.reply_markup).includes('p:bk'));
+
+    sent.length = 0;
+    await sendUpdate(commandMessage('/panel', { id: 777, first_name: 'Ali', username: 'ali_test' }));
+    await sleep(250);
+    check('fuqaro panelni ocholmaydi',
+      !toUser(777).some((m) => String(m.text).includes('Dekanat paneli')),
+      JSON.stringify(toUser(777).map((m) => String(m.text).slice(0, 50))).slice(0, 200));
+
+    /* Ro'yxat va murojaat kartasi */
+    edits.length = 0; callbacks.length = 0;
+    await pressButton('p:l:new:0');
+    await sleep(300);
+    check('«Yangi» ro\'yxati tugma orqali ochiladi',
+      edits.some((e) => String(e.text).includes('murojaatlar')) &&
+      edits.some((e) => JSON.stringify(e.reply_markup || {}).includes('p:a:')),
+      JSON.stringify(edits.map((e) => String(e.text).slice(0, 50))).slice(0, 200));
+
+    const panelAppeal = db().prepare("SELECT * FROM appeals WHERE status = 'new' ORDER BY id DESC LIMIT 1").get();
+    edits.length = 0;
+    await pressButton(`p:a:${panelAppeal.id}`);
+    await sleep(300);
+    check('murojaat kartasi panelda ochiladi',
+      edits.some((e) => String(e.text).includes(panelAppeal.code) && JSON.stringify(e.reply_markup).includes(`p:r:${panelAppeal.id}`)),
+      JSON.stringify(edits.map((e) => String(e.text).slice(0, 60))).slice(0, 200));
+
+    edits.length = 0;
+    await pressButton(`p:s:${panelAppeal.id}:in_progress`);
+    await sleep(350);
+    check('panel tugmasi holatni o\'zgartiradi',
+      db().prepare('SELECT status FROM appeals WHERE id = ?').get(panelAppeal.id).status === 'in_progress');
+    check('amal jurnalga yozildi',
+      db().prepare("SELECT COUNT(*) AS n FROM admin_log WHERE action = 'holat_in_progress' AND target_id = ?").get(panelAppeal.id).n === 1);
+
+    /* Paneldan javob yozish: force_reply → javob fuqaroga boradi */
+    sent.length = 0;
+    await pressButton(`p:r:${panelAppeal.id}`);
+    await sleep(300);
+    const prompt = sent.find((m) => String(m.text).includes('javob matnini'));
+    check('«Javob yozish» force_reply so\'raydi',
+      !!prompt && JSON.stringify(prompt.reply_markup || {}).includes('force_reply'),
+      JSON.stringify(sent.map((m) => String(m.text).slice(0, 50))).slice(0, 200));
+    check('javob marshruti saqlandi',
+      !!prompt && !!db().prepare('SELECT * FROM routes WHERE chat_id = ? AND message_id = ?').get(ADMIN_CHAT, prompt._messageId));
+
+    sent.length = 0;
+    await sendUpdate(adminMessage('Panel orqali yozilgan javob matni.', {
+      reply_to_message: { message_id: prompt._messageId, date: 0, chat: { id: ADMIN_CHAT, type: 'supergroup' }, text: prompt.text },
+    }));
+    await sleep(400);
+    check('paneldan yozilgan javob fuqaroga yetadi',
+      toUser(panelAppeal.tg_id).some((m) => String(m.text).includes('Panel orqali yozilgan javob')),
+      JSON.stringify(toUser(panelAppeal.tg_id).map((m) => String(m.text).slice(0, 50))).slice(0, 200));
+
+    /* Qidirish */
+    sent.length = 0;
+    await pressButton('p:q');
+    await sleep(250);
+    const searchPrompt = sent.find((m) => String(m.text).includes('Qidirish'));
+    check('qidirish so\'rovi chiqadi', !!searchPrompt);
+    sent.length = 0;
+    await sendUpdate(adminMessage(panelAppeal.code, {
+      reply_to_message: { message_id: searchPrompt._messageId, date: 0, from: { id: 42, is_bot: true, first_name: 'Murojaat', username: 'murojaat_test_bot' }, chat: { id: ADMIN_CHAT, type: 'supergroup' }, text: searchPrompt.text },
+    }));
+    await sleep(300);
+    check('qidiruv natijasi tugmalar bilan keladi',
+      sent.some((m) => String(m.text).includes('natija') && JSON.stringify(m.reply_markup || {}).includes('p:a:')),
+      JSON.stringify(sent.map((m) => String(m.text).slice(0, 50))).slice(0, 200));
+
+    section('Panel: adminlarni ID orqali boshqarish');
+    /* Egasi yangi adminni ID bilan qo'shadi */
+    sent.length = 0;
+    await pressButton('p:aadd');
+    await sleep(250);
+    const addPrompt = sent.find((m) => String(m.text).includes('Yangi admin'));
+    check('«ID bilan admin qo\'shish» so\'rovi chiqadi', !!addPrompt);
+
+    sent.length = 0;
+    await sendUpdate(adminMessage('5003', {
+      reply_to_message: { message_id: addPrompt._messageId, date: 0, from: { id: 42, is_bot: true, first_name: 'Murojaat', username: 'murojaat_test_bot' }, chat: { id: ADMIN_CHAT, type: 'supergroup' }, text: addPrompt.text },
+    }));
+    await sleep(350);
+    check('ID orqali admin qo\'shiladi',
+      !!db().prepare('SELECT * FROM admins WHERE tg_id = 5003').get(),
+      JSON.stringify(sent.map((m) => String(m.text).slice(0, 50))).slice(0, 200));
+    check('yangi adminga xabar yuboriladi',
+      sent.some((m) => String(m.chat_id) === '5003' && String(m.text).includes('panel')),
+      JSON.stringify(sent.map((m) => [m.chat_id, String(m.text).slice(0, 30)])).slice(0, 200));
+    check('admin qo\'shilgani jurnalga tushadi',
+      db().prepare("SELECT COUNT(*) AS n FROM admin_log WHERE action = 'admin_qoshdi' AND target_id = 5003").get().n === 1);
+
+    sent.length = 0;
+    await sendUpdate(adminMessage('oddiy-matn-emas-raqam', {
+      reply_to_message: { message_id: addPrompt._messageId, date: 0, from: { id: 42, is_bot: true, first_name: 'Murojaat', username: 'murojaat_test_bot' }, chat: { id: ADMIN_CHAT, type: 'supergroup' }, text: addPrompt.text },
+    }));
+    await sleep(250);
+    check('noto\'g\'ri ID qabul qilinmaydi',
+      db().prepare('SELECT COUNT(*) AS n FROM admins').get().n === 2,
+      'adminlar: ' + db().prepare('SELECT COUNT(*) AS n FROM admins').get().n);
+
+    /* Yangi admin o'z shaxsiy chatida panelni ochadi */
+    sent.length = 0;
+    await sendUpdate({
+      message: {
+        message_id: ++messageId, date: Math.floor(Date.now() / 1000),
+        chat: { id: 5003, type: 'private' }, from: { id: 5003, is_bot: false, first_name: 'Yangi' },
+        text: '/panel', entities: [{ type: 'bot_command', offset: 0, length: 6 }],
+      },
+    });
+    await sleep(300);
+    const newAdminMenu = sent.find((m) => String(m.chat_id) === '5003' && String(m.text).includes('Dekanat paneli'));
+    check('yangi admin o\'z chatida panelni ochadi', !!newAdminMenu,
+      JSON.stringify(sent.map((m) => [m.chat_id, String(m.text).slice(0, 30)])).slice(0, 200));
+    check('oddiy adminda «Adminlar» tugmasi yo\'q',
+      !!newAdminMenu && !JSON.stringify(newAdminMenu.reply_markup).includes('p:ad'),
+      JSON.stringify(newAdminMenu && newAdminMenu.reply_markup).slice(0, 200));
+
+    callbacks.length = 0;
+    await pressButton('p:ad', { id: 5003, first_name: 'Yangi' }, { id: 5003, type: 'private' }, 7100);
+    await sleep(250);
+    check('oddiy admin adminlar ro\'yxatini ko\'rolmaydi',
+      String(lastCallback().text || '').includes('egasi'), JSON.stringify(lastCallback()).slice(0, 150));
+
+    callbacks.length = 0;
+    await pressButton('p:bk', { id: 5003, first_name: 'Yangi' }, { id: 5003, type: 'private' }, 7101);
+    await sleep(250);
+    check('oddiy admin zaxirani olmaydi',
+      String(lastCallback().text || '').includes('egasi'), JSON.stringify(lastCallback()).slice(0, 150));
+
+    callbacks.length = 0;
+    await pressButton('p:l:new:0', { id: STRANGER, first_name: 'Begona' }, { id: ADMIN_CHAT, type: 'supergroup' }, 7102);
+    await sleep(250);
+    check('begona odam panel tugmasini bosolmaydi',
+      String(lastCallback().text || '').includes('huquqi yo\'q'), JSON.stringify(lastCallback()).slice(0, 150));
+
+    /* Egani o'chirib bo'lmaydi, oddiy adminni — mumkin */
+    callbacks.length = 0;
+    await pressButton(`p:adel:${ADMIN_USER}`);
+    await sleep(250);
+    check('sozlamadagi egani o\'chirib bo\'lmaydi',
+      !!db().prepare('SELECT * FROM admins WHERE tg_id = ?').get(ADMIN_USER) &&
+      /Sozlamadagi/i.test(String(lastCallback().text || '')), JSON.stringify(lastCallback()).slice(0, 150));
+
+    sent.length = 0;
+    await pressButton('p:adel:5003');
+    await sleep(300);
+    check('oddiy admin ID bo\'yicha o\'chiriladi',
+      !db().prepare('SELECT * FROM admins WHERE tg_id = 5003').get());
+    check('o\'chirilgan adminga xabar beriladi',
+      sent.some((m) => String(m.chat_id) === '5003' && String(m.text).includes('olib tashlandi')),
+      JSON.stringify(sent.map((m) => [m.chat_id, String(m.text).slice(0, 30)])).slice(0, 200));
+    check('o\'chirish jurnalga tushadi',
+      db().prepare("SELECT COUNT(*) AS n FROM admin_log WHERE action = 'admin_ochirdi' AND target_id = 5003").get().n === 1);
+
+    sent.length = 0;
+    await sendUpdate({
+      message: {
+        message_id: ++messageId, date: Math.floor(Date.now() / 1000),
+        chat: { id: 5003, type: 'private' }, from: { id: 5003, is_bot: false, first_name: 'Yangi' },
+        text: '/panel', entities: [{ type: 'bot_command', offset: 0, length: 6 }],
+      },
+    });
+    await sleep(300);
+    check('huquqi olingan odam panelni ocholmaydi',
+      !sent.some((m) => String(m.chat_id) === '5003' && String(m.text).includes('Dekanat paneli')),
+      JSON.stringify(sent.map((m) => [m.chat_id, String(m.text).slice(0, 40)])).slice(0, 200));
+
+    /* Xabarnoma: murojaat adminning shaxsiy chatiga ham keladi */
+    callbacks.length = 0; sent.length = 0;
+    await pressButton('p:nt');
+    await sleep(250);
+    check('xabarnoma tugmasi yoqadi',
+      db().prepare('SELECT notify FROM admins WHERE tg_id = ?').get(ADMIN_USER).notify === 1,
+      JSON.stringify(lastCallback()).slice(0, 120));
+
+    sent.length = 0;
+    await sendUpdate(userMessage('Xabarnoma sinovi uchun yuborilgan murojaat matni.', { id: 797, first_name: 'Xabar' }));
+    await sleep(500);
+    check('murojaat adminning shaxsiy chatiga ham keladi',
+      sent.some((m) => String(m.chat_id) === String(ADMIN_USER) && String(m.text).includes('Xabarnoma sinovi')),
+      JSON.stringify(sent.map((m) => [m.chat_id, String(m.text).slice(0, 30)])).slice(0, 220));
+
+    sent.length = 0;
+    await pressButton('p:nt');
+    await sleep(250);
+    check('xabarnoma tugmasi o\'chiradi',
+      db().prepare('SELECT notify FROM admins WHERE tg_id = ?').get(ADMIN_USER).notify === 0);
+
+    /* Paneldan zaxira — guruhda bosilsa shaxsiy chatga ketadi */
+    documents.length = 0; sent.length = 0;
+    await pressButton('p:bk');
+    await sleep(700);
+    check('paneldan zaxira shaxsiy chatga yuboriladi',
+      documents.some((d) => String(d.chat_id) === String(ADMIN_USER)) &&
+      !documents.some((d) => String(d.chat_id) === String(ADMIN_CHAT)),
+      JSON.stringify(documents.map((d) => d.chat_id)).slice(0, 120));
+    check('zaxira jurnalga yozildi',
+      db().prepare("SELECT COUNT(*) AS n FROM admin_log WHERE action = 'zaxira'").get().n >= 1);
+
+    /* .env dan olib tashlangan egasi bazada ham qolmaydi (sozlama — hokim) */
+    {
+      const seeded = execFileSync(process.execPath, ['-e', `
+        const store = require(${JSON.stringify(path.join(__dirname, '..', 'src', 'store.js'))});
+        store.addAdmin(9999, { role: 'owner', note: 'sozlamadan (.env)' });
+        const bot = require(${JSON.stringify(path.join(__dirname, '..', 'src', 'bot.js'))});
+        const before = !!store.getAdmin(9999);
+        bot.panel.bootstrap();
+        console.log(JSON.stringify({ before, after: !!store.getAdmin(9999), owner: !!store.getAdmin(${ADMIN_USER}) }));
+        process.exit(0);
+      `], { cwd: path.join(__dirname, '..'), encoding: 'utf8', env: { ...env, LOG_LEVEL: 'error' } });
+      let seedOut = {};
+      try { seedOut = JSON.parse(seeded.trim().split('\n').pop()); } catch { /* xato */ }
+      check('.env dan chiqarilgan egasi paneldan ham o\'chadi',
+        seedOut.before === true && seedOut.after === false && seedOut.owner === true,
+        JSON.stringify(seedOut).slice(0, 150));
+    }
+
     section('Eski bazani yangilash (migratsiya)');
     {
       /* v1 sxemali baza (birinchi versiyada chiqarilgan) — yangi kod uni
@@ -1133,7 +1403,7 @@ const toUser = (id) => sent.filter((m) => String(m.chat_id) === String(id));
       })();
       let mig = {};
       try { mig = JSON.parse(migrateOut.trim().split('\n').pop()); } catch { /* xato */ }
-      check('eski (v1) baza yangi sxemaga ko\'chadi', mig.version === 4, migrateOut.slice(-200));
+      check('eski (v1) baza yangi sxemaga ko\'chadi', mig.version === 5, migrateOut.slice(-200));
       check('migratsiyada murojaat, telefon va ilova yo\'qolmaydi',
         mig.body === 'Eski bazadagi murojaat matni.' && mig.phone === '+998901234567' &&
         mig.attachments === 1 && mig.route === true, JSON.stringify(mig).slice(0, 200));

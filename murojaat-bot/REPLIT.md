@@ -62,7 +62,7 @@ Chap paneldagi **🔒 Secrets** bo'limini oching va qo'shing:
 |---|---|
 | `BOT_TOKEN` | @BotFather bergan token |
 | `ADMIN_CHAT_IDS` | yuqorida aniqlagan chat ID |
-| `ADMIN_USER_IDS` | *(guruh ishlatsangiz)* javob bera oladigan xodimlar ID'si |
+| `ADMIN_USER_IDS` | panel egalari (guruh ishlatsangiz — majburiy); qolgan adminlar `/panel` → 👥 Adminlar orqali qo'shiladi |
 
 Boshqa hech narsa shart emas — qolgan sozlamalar standart qiymatda ishlaydi.
 

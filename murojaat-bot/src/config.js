@@ -133,9 +133,9 @@ function validate() {
   if (!config.botToken) fatal.push('BOT_TOKEN ko\'rsatilmagan (@BotFather bergan token).');
   else if (!/^\d{5,}:[A-Za-z0-9_-]{30,}$/.test(config.botToken)) warn.push('BOT_TOKEN formati odatdagidan farq qiladi — tekshiring.');
 
-  if (!config.adminChatIds.length) {
-    fatal.push('ADMIN_CHAT_IDS ko\'rsatilmagan — murojaatlar kimga yuborilishini bilmaymiz. ' +
-      'O\'z Telegram ID\'ingizni @userinfobot dan oling.');
+  if (!config.adminChatIds.length && !config.adminUserIds.length) {
+    fatal.push('ADMIN_CHAT_IDS ham, ADMIN_USER_IDS ham ko\'rsatilmagan — murojaatlar kimga ' +
+      'yuborilishini bilmaymiz. O\'z Telegram ID\'ingizni @userinfobot dan oling.');
   }
   if (!['polling', 'webhook'].includes(config.botMode)) fatal.push('BOT_MODE faqat "polling" yoki "webhook".');
   if (config.botMode === 'webhook') {

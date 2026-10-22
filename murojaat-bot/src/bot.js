@@ -17,6 +17,7 @@ const { Bot, GrammyError, HttpError, Keyboard, InlineKeyboard, InputFile } = req
 const { config } = require('./config');
 const store = require('./store');
 const log = require('./logger');
+const panel = require('./panel');
 const { escapeHtml, sanitizeText, cut, RateLimiter } = require('./security');
 
 const bot = new Bot(config.botToken, { client: { apiRoot: config.botApiRoot } });
@@ -64,9 +65,23 @@ const fullName = (user) => [user?.first_name, user?.last_name].filter(Boolean).j
 const localTime = (ms) => new Date(ms).toLocaleString('uz-UZ', { timeZone: 'Asia/Tashkent' });
 const sleep = (ms) => new Promise((resolve) => { const t = setTimeout(resolve, ms); t.unref?.(); });
 
-/* Admin chatimi va admin odammi */
+/* Admin chatimi va admin odammi.
+   Admin — Telegram ID bo'yicha aniqlanadi: .env dagi ADMIN_USER_IDS yoki
+   panel orqali qo'shilgan admin (bazada). Sozlamada ADMIN_USER_IDS bo'lmasa,
+   ADMIN_CHAT_IDS dagi shaxsiy chat egasi adminning o'zi hisoblanadi. */
 const isAdminChat = (chatId) => config.adminChatIds.includes(chatId);
-const isAdminUser = (userId) => !config.adminUserIds.length || config.adminUserIds.includes(userId);
+const isAdminUser = (userId, chatId = null) => panel.isAdmin(userId) ||
+  (!config.adminUserIds.length && chatId !== null && chatId > 0 && isAdminChat(chatId));
+
+/* Murojaat kartasi yuboriladigan chatlar: sozlamadagi chatlar + xabarnomani
+   yoqib qo'ygan adminlarning shaxsiy chatlari */
+function appealTargets() {
+  const targets = [...config.adminChatIds];
+  for (const admin of store.listNotifyAdmins()) {
+    if (!targets.includes(admin.tg_id)) targets.push(admin.tg_id);
+  }
+  return targets;
+}
 
 /* =====================================================================
    MATNLAR
@@ -110,6 +125,9 @@ raqamingiz faqat dekanat xodimlariga ko'rinadi. Uchinchi shaxslarga berilmaydi.`
 
 const adminHelpText = () => `<b>Dekanat uchun qo'llanma</b>
 
+<b>/panel</b> — tugmalar bilan boshqaruv: murojaatlar ro'yxati, qidirish,
+holatlar, bloklanganlar, adminlar va zaxira.
+
 Har bir yangi murojaat shu chatga keladi. Javob berish uchun:
 • murojaat xabariga <b>«reply»</b> qilib javobingizni yozing, yoki
 • <code>/javob MR-${new Date().getFullYear()}-0007 javob matni</code>
@@ -121,6 +139,7 @@ Xabar tagidagi tugmalar: holatni o'zgartirish va bloklash.
 <b>Buyruqlar</b>
 /murojaat &lt;raqam&gt; — murojaat kartasini qaytadan chiqarish
 /navbat — yetib bormagan murojaatlarni qayta yuborish
+/panel — boshqaruv paneli (tugmalar bilan)
 /statistika — umumiy holat
 /kechikkanlar — ${config.slaHours} soatdan beri javobsiz murojaatlar
 /javob &lt;raqam&gt; &lt;matn&gt; — raqam bo'yicha javob berish
@@ -236,8 +255,9 @@ bot.use(async (ctx, next) => {
   if (!from || from.is_bot) return;
 
   const chatId = ctx.chat?.id;
-  const adminChat = !!chatId && isAdminChat(chatId);
   const isPrivate = ctx.chat?.type === 'private';
+  /* Adminning o'z shaxsiy chati ham dekanat chati sifatida ishlaydi (panel) */
+  const adminChat = !!chatId && (isAdminChat(chatId) || (isPrivate && panel.isAdmin(from.id)));
 
   /* Na shaxsiy chat, na admin chati — e'tiborsiz qoldiramiz */
   if (!isPrivate && !adminChat) {
@@ -245,7 +265,7 @@ bot.use(async (ctx, next) => {
     return;
   }
 
-  ctx.state = { adminChat, isPrivate, admin: adminChat && isAdminUser(from.id) };
+  ctx.state = { adminChat, isPrivate, admin: adminChat && isAdminUser(from.id, chatId) };
 
   /* Guruh supergruppaga aylansa chat_id butunlay o'zgaradi va ADMIN_CHAT_IDS
      eskiradi — murojaatlar navbatda qolib ketadi. Dekanatni yangi guruhda
@@ -336,7 +356,7 @@ async function sendAppealToAdmins(appeal, attachments = []) {
   const buttons = appealButtons(appeal, blocked);
   let delivered = 0;
 
-  for (const chatId of config.adminChatIds) {
+  for (const chatId of appealTargets()) {
     try {
       let header;
       let tail = rest;
@@ -892,6 +912,7 @@ async function sendWithRetry(chatId, text, options, attempts = 3) {
 const ADMIN_COMMANDS = new Set([
   'javob', 'murojaat', 'karta', 'navbat', 'statistika', 'kechikkanlar',
   'bloklash', 'blokdan', 'bloklanganlar', 'zaxira', 'start', 'yordam', 'help',
+  'panel', 'menyu',
 ]);
 
 async function handleAdminMessage(ctx) {
@@ -905,6 +926,7 @@ async function handleAdminMessage(ctx) {
       return;
     }
     switch (command.name) {
+      case 'panel': case 'menyu': return panel.open(ctx);
       case 'javob': return adminReplyByCode(ctx, command.argument);
       case 'murojaat': case 'karta': return adminShowAppeal(ctx, command.argument);
       case 'navbat': return adminRetryQueue(ctx);
@@ -936,6 +958,9 @@ async function handleAdminMessage(ctx) {
       default: break;      /* ADMIN_COMMANDS bu holatga yo'l qo'ymaydi */
     }
   }
+
+  /* Panel so'ragan ma'lumot (admin ID'si, qidiruv so'zi) */
+  if (await panel.handleReply(ctx)) return;
 
   /* "Reply" — murojaatga javob */
   const replyTo = ctx.message?.reply_to_message;
@@ -1173,6 +1198,8 @@ async function adminBlockedList(ctx) {
 /* ------------------------------ Tugmalar ---------------------------- */
 bot.on('callback_query:data', async (ctx) => {
   if (!ctx.state?.adminChat) { await ctx.answerCallbackQuery({ text: 'Ruxsat yo\'q', show_alert: true }); return; }
+  /* Panel tugmalari — huquqni panelning o'zi tekshiradi */
+  if (await panel.handleCallback(ctx)) return;
   if (!ctx.state.admin) { await ctx.answerCallbackQuery({ text: 'Sizda huquq yo\'q', show_alert: true }); return; }
 
   const data = ctx.callbackQuery.data || '';
@@ -1238,7 +1265,7 @@ async function retryUndelivered({ limit = 5, windowMs = 48 * 3600_000 } = {}) {
 }
 
 async function sendDailyDigest({ force = false } = {}) {
-  if (!config.adminChatIds.length) return { sent: false, reason: 'chat yo\'q' };
+  if (!appealTargets().length) return { sent: false, reason: 'chat yo\'q' };
   const local = new Date(Date.now() + config.tzOffsetHours * 3600_000);
   const today = local.toISOString().slice(0, 10);
   if (!force) {
@@ -1272,7 +1299,7 @@ async function sendDailyDigest({ force = false } = {}) {
       : '✅ Javobsiz qolgan murojaat yo\'q. Rahmat!');
 
   let sent = 0;
-  for (const chatId of config.adminChatIds) {
+  for (const chatId of appealTargets()) {
     try { await bot.api.sendMessage(chatId, text, { parse_mode: 'HTML' }); sent++; }
     catch (err) { log.warn('kunlik xulosa yuborilmadi', { chat_id: chatId, error: String(err.message) }); }
   }
@@ -1331,17 +1358,55 @@ bot.catch((err) => {
   reportError(err.error, where);
 });
 
+const CITIZEN_COMMANDS = [
+  { command: 'start', description: 'Boshlash' },
+  { command: 'murojaatlarim', description: 'Mening murojaatlarim' },
+  { command: 'holat', description: 'Murojaat holati (raqam bilan)' },
+  { command: 'yordam', description: 'Qo\'llanma' },
+];
+
+const ADMIN_COMMANDS_MENU = [
+  { command: 'panel', description: 'Boshqaruv paneli' },
+  { command: 'javob', description: 'Javob berish: /javob MR-… matn' },
+  { command: 'murojaat', description: 'Murojaat kartasi: /murojaat MR-…' },
+  { command: 'statistika', description: 'Umumiy holat' },
+  { command: 'kechikkanlar', description: 'Javobsiz murojaatlar' },
+  { command: 'navbat', description: 'Yetib bormaganlarni qayta yuborish' },
+  { command: 'yordam', description: 'Dekanat qo\'llanmasi' },
+];
+
 async function setMyCommands() {
-  await bot.api.setMyCommands([
-    { command: 'start', description: 'Boshlash' },
-    { command: 'murojaatlarim', description: 'Mening murojaatlarim' },
-    { command: 'holat', description: 'Murojaat holati (raqam bilan)' },
-    { command: 'yordam', description: 'Qo\'llanma' },
-  ]);
+  await bot.api.setMyCommands(CITIZEN_COMMANDS);
+
+  /* Dekanat chatlarida va adminlarning shaxsiy chatlarida boshqa ro'yxat */
+  const adminChats = new Set(config.adminChatIds);
+  for (const admin of store.listAdmins(100)) adminChats.add(admin.tg_id);
+  for (const chatId of adminChats) {
+    try {
+      await bot.api.setMyCommands(ADMIN_COMMANDS_MENU, { scope: { type: 'chat', chat_id: chatId } });
+    } catch (err) {
+      log.debug('admin buyruqlari o\'rnatilmadi', { chat_id: chatId, error: String(err.message) });
+    }
+  }
 }
 
+/* Panelga kerakli yordamchilarni beramiz (aylanma require bo'lmasligi uchun) */
+panel.init({
+  bot,
+  buildAppealCard,
+  appealButtons,
+  sendAttachment,
+  refreshAppealCards,
+  notifyAuthorInProgress,
+  sendBackupToTelegram,
+  deliverReply,
+  STATUS_LABEL,
+  localTime,
+  fullName,
+});
+
 module.exports = {
-  bot, setMyCommands,
+  bot, setMyCommands, panel,
   sendAppealToAdmins, deliverReply, refreshAppealCards, retryUndelivered,
   notifyAuthorInProgress, sendDailyDigest, sendBackupToTelegram,
   STATUS_LABEL,

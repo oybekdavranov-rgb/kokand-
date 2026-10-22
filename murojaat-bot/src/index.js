@@ -86,7 +86,12 @@ async function main() {
   await storage.restoreIfMissing();
 
   store = require('./store');
-  ({ bot, setMyCommands, sendDailyDigest, sendBackupToTelegram, retryUndelivered } = require('./bot'));
+  const botModule = require('./bot');
+  ({ bot, setMyCommands, sendDailyDigest, sendBackupToTelegram, retryUndelivered } = botModule);
+
+  /* .env dagi egalar bazada ham ro'yxatdan o'tadi (panel huquqlari shu yerda) */
+  const adminCount = botModule.panel.bootstrap();
+  log.info(`panel adminlari: ${adminCount} ta (/panel)`);
 
   /* --- 3. Jadvalli vazifalar --- */
   const digest = setInterval(() => {
