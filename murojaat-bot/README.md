@@ -223,7 +223,7 @@ yozishmalar Telegram'da saqlanib turadi.
 | Buyruq | Vazifasi |
 |---|---|
 | `npm start` | botni ishga tushirish |
-| `npm test` | uchdan-uchiga tekshiruv (116 test, Telegram'siz) |
+| `npm test` | uchdan-uchiga tekshiruv (117 test, Telegram'siz) |
 | `npm run backup` | bazaning zaxira nusxasi |
 | `npm run restore -- <fayl>` | zaxiradan tiklash |
 | `npm run webhook set\|info\|delete` | webhook boshqaruvi |

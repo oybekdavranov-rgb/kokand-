@@ -41,6 +41,7 @@ const edits = [];        // editMessageText
 const apiCalls = [];
 let messageId = 1000;
 let failChats = new Set();          // shu chatlarga yuborish 403 beradi
+const floodOnce = new Set();        // shu matn belgisi bilan bir marta 429 qaytaradi
 
 function mockApi() {
   return http.createServer((req, res) => {
@@ -73,6 +74,15 @@ function mockApi() {
         case 'getMe':
           return ok({ id: 42, is_bot: true, first_name: 'Murojaat', username: 'murojaat_test_bot' });
         case 'sendMessage': {
+          /* Telegram flood chegarasi: belgilangan matnga bir marta 429 */
+          for (const marker of floodOnce) {
+            if (String(body.text || '').includes(marker)) {
+              floodOnce.delete(marker);
+              res.writeHead(429, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ ok: false, error_code: 429, description: 'Too Many Requests: retry after 1', parameters: { retry_after: 1 } }));
+              return;
+            }
+          }
           /* Telegram razmetkani tushunmasa 400 qaytaradi (sinov uchun belgi) */
           if (String(body.text || '').includes('ENTITY-XATO') && !String(body.text).includes('to\'liq matn keyingi xabarda')) {
             res.writeHead(400, { 'Content-Type': 'application/json' });
@@ -643,6 +653,18 @@ const toUser = (id) => sent.filter((m) => String(m.chat_id) === String(id));
       JSON.stringify(sent.map((m) => String(m.text || '').length)).slice(0, 150));
     check('kartaga sig\'magan qism alohida xabarda keladi',
       sent.some((m) => String(m.chat_id) === String(ADMIN_CHAT) && String(m.text).includes('davomi')),
+      JSON.stringify(sent.filter((m) => String(m.chat_id) === String(ADMIN_CHAT)).map((m) => String(m.text).slice(0, 40))).slice(0, 220));
+
+    /* Admin chatida 429 (flood) bo'lsa — karta kutib qayta yuboriladi */
+    sent.length = 0;
+    floodOnce.add('FLOOD-SINOV');
+    await sendUpdate(userMessage('Murojaat matni FLOOD-SINOV belgisi bilan yuborildi.', { id: 796, first_name: 'Flood' }));
+    await sleep(3000);
+    const floodAppeal = db().prepare('SELECT * FROM appeals WHERE tg_id = 796 ORDER BY id DESC LIMIT 1').get();
+    check('429 dan keyin karta baribir dekanatga yetadi',
+      !!floodAppeal &&
+      db().prepare('SELECT COUNT(*) AS n FROM routes WHERE appeal_id = ? AND is_header = 1').get(floodAppeal.id).n === 1 &&
+      sent.some((m) => String(m.chat_id) === String(ADMIN_CHAT) && String(m.text).includes('FLOOD-SINOV')),
       JSON.stringify(sent.filter((m) => String(m.chat_id) === String(ADMIN_CHAT)).map((m) => String(m.text).slice(0, 40))).slice(0, 220));
 
     /* Karta qabul qilinmasa — qisqartirilgan karta bilan baribir yetkaziladi */

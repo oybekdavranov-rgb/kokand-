@@ -318,7 +318,7 @@ async function sendAppealBodyTail(chatId, appeal, headerId, rest) {
   const chunks = splitForTelegram(remainder, 3500);
   for (let i = 0; i < chunks.length; i++) {
     try {
-      const sent = await bot.api.sendMessage(chatId,
+      const sent = await sendWithRetry(chatId,
         `📝 <b>Murojaat matni — davomi ${i + 1}/${chunks.length}</b>\n🔖 <code>${appeal.code}</code>\n\n${escapeHtml(chunks[i])}`,
         { parse_mode: 'HTML', reply_parameters: { message_id: headerId, allow_sending_without_reply: true } });
       if (sent?.message_id) store.addRoute(chatId, sent.message_id, appeal.id, 0);
@@ -341,12 +341,13 @@ async function sendAppealToAdmins(appeal, attachments = []) {
       let header;
       let tail = rest;
       try {
-        header = await bot.api.sendMessage(chatId, card, { parse_mode: 'HTML', reply_markup: buttons });
+        /* 429 (flood) bo'lsa Telegram aytgan vaqtni kutib qayta yuboradi */
+        header = await sendWithRetry(chatId, card, { parse_mode: 'HTML', reply_markup: buttons });
       } catch (err) {
         /* Karta qabul qilinmasa (uzunlik, razmetka) — eng kichik karta bilan
            baribir yetkazamiz, aks holda murojaat dekanat uchun ko'rinmas bo'ladi */
         log.warn('karta yuborilmadi, qisqartirilgan karta yuboriladi', { code: appeal.code, error: String(err.message) });
-        header = await bot.api.sendMessage(chatId, minimalAppealCard(appeal, blocked), { parse_mode: 'HTML', reply_markup: buttons });
+        header = await sendWithRetry(chatId, minimalAppealCard(appeal, blocked), { parse_mode: 'HTML', reply_markup: buttons });
         tail = splitBodyForCard(appeal.body, 600).rest;
       }
       store.addRoute(chatId, header.message_id, appeal.id, 1);
