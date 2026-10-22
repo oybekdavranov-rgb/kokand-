@@ -1,0 +1,79 @@
+═══════════════════════════════════════════════════════════════════════
+  MUROJAAT BOTI — Ta'lim fakulteti dekanati
+  Xursanaliyev Boburmirzo Farhod o'g'li qabulxonasi
+═══════════════════════════════════════════════════════════════════════
+
+NIMA QILADI
+  Fuqaro botga oddiy xabar yozadi  →  murojaat dekanatning Telegram
+  chatiga karta bo'lib keladi  →  dekan o'sha kartaga «reply» qilib
+  javob yozadi  →  javob fuqaroga yetib boradi.
+
+  Boshqaruv ham Telegram ichida:  /panel  (web-sayt, login, parol YO'Q)
+
+
+1. KERAKLI NARSALAR
+   • Node.js 20 yoki undan yangi      (node -v  bilan tekshiriladi)
+   • Telegram bot tokeni              (@BotFather → /newbot)
+   • O'z Telegram ID'ingiz            (@userinfobot → /start)
+
+
+2. ISHGA TUSHIRISH (3 qadam)
+
+   npm install
+   cp .env.example .env        # ichiga BOT_TOKEN va ADMIN_CHAT_IDS yozing
+   npm start
+
+   .env ichida eng kami shu ikki qator bo'lsa yetadi:
+
+     BOT_TOKEN=123456789:AA...                  ← @BotFather bergan token
+     ADMIN_CHAT_IDS=123456789                   ← murojaatlar keladigan chat
+
+   Dekanat GURUHI ishlatilsa:
+     ADMIN_CHAT_IDS=-1001234567890              ← guruh ID'si
+     ADMIN_USER_IDS=123456789,987654321         ← javob bera oladigan xodimlar
+   (guruh ishlatilganda ADMIN_USER_IDS majburiy; botni guruhda admin
+    qilish SHART EMAS — kartaga qilingan «reply» botga baribir yetadi)
+
+
+3. TEKSHIRISH
+   npm test        → Telegram'ga ulanmasdan 153 ta tekshiruv o'tadi
+
+
+4. DEKANAT UCHUN BUYRUQLAR
+   /panel          boshqaruv paneli (tugmalar bilan — asosiysi shu)
+   /javob MR-2026-0007 javob matni
+   /murojaat MR-2026-0007      kartani qaytadan chiqarish
+   /statistika     umumiy holat
+   /kechikkanlar   javobsiz murojaatlar
+   /navbat         yetib bormagan murojaatlarni qayta yuborish
+   /zaxira         bazaning nusxasi (shaxsiy chatga)
+   /yordam         qo'llanma
+
+   ADMIN QO'SHISH:  /panel → 👥 Adminlar → ➕ ID bilan admin qo'shish
+   Xodimning Telegram ID'sini yuborasiz — u darhol ishlay oladi.
+   Fayl tahrirlash va qayta ishga tushirish shart emas.
+
+
+5. QAYERDA NIMA BOR
+   README.md       to'liq qo'llanma (panel, sozlamalar, xavfsizlik, zaxira)
+   REPLIT.md       Replit'da ishga tushirish (brauzerdan, serversiz)
+   .env.example    barcha sozlamalar izohi bilan
+   src/            bot kodi  (bot.js, panel.js, store.js, config.js, …)
+   test/smoke.js   uchdan-uchiga tekshiruv
+   deploy/         systemd va nginx namunalari
+   Dockerfile      Docker bilan joylashtirish
+   scripts/        zaxira, tiklash, webhook boshqaruvi
+
+   Baza:  data/murojaat.db   (o'zi yaratiladi, huquqi 600)
+   .env va data/ papkasini HECH QACHON ommaga qo'ymang.
+
+
+6. JOYLASHTIRISH
+   • VPS (tavsiya):  deploy/murojaat-bot.service — polling rejimi,
+     port ochish, domen va sertifikat kerak emas.  README.md → 5-bo'lim
+   • Replit:         REPLIT.md
+   • Docker:         docker compose up -d --build
+
+═══════════════════════════════════════════════════════════════════════
+  Savol tug'ilsa README.md ning 10-bo'limi («Muammolar») ga qarang.
+═══════════════════════════════════════════════════════════════════════
