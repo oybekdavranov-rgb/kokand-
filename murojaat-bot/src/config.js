@@ -100,6 +100,8 @@ const config = {
   backupToTelegram: bool('BACKUP_TO_TELEGRAM', true),
   backupHours: num('BACKUP_HOURS', 24, { min: 1, max: 720 }),
   backupChatId: num('BACKUP_CHAT_ID', 0, { min: -1e15, max: 1e15 }),
+  /* Zaxira guruhga yuborilsin? Sukut: YO'Q (bazada shaxsiy ma'lumot bor) */
+  backupAllowGroup: bool('BACKUP_ALLOW_GROUP', false),
   storageMode: str('STORAGE_MODE', isReplit ? 'replit' : 'off').toLowerCase(),
   storageDir: str('STORAGE_DIR', ''),
   snapshotMinutes: num('SNAPSHOT_MINUTES', 2, { min: 1, max: 1440 }),
@@ -146,7 +148,16 @@ function validate() {
   }
   if (config.appealMaxLength > 3800) warn.push('APPEAL_MAX_LENGTH juda katta — Telegram xabari 4096 belgidan oshmaydi.');
   if (!config.adminUserIds.length && config.adminChatIds.some((id) => id < 0)) {
-    warn.push('Admin chati guruh — ADMIN_USER_IDS ko\'rsatilmasa, guruhdagi HAR KIM javob bera oladi va tugmalarni bosa oladi.');
+    fatal.push('Admin chati GURUH, lekin ADMIN_USER_IDS bo\'sh — bunda guruhdagi har kim ' +
+      'dekanat nomidan javob bera oladi, fuqarolarni bloklaydi va /zaxira bilan bazani yuklab oladi. ' +
+      'ADMIN_USER_IDS ga javob bera oladigan xodimlar ID\'sini yozing (@userinfobot).');
+  }
+  if (config.backupToTelegram && config.backupChatId < 0 && !config.backupAllowGroup) {
+    warn.push('BACKUP_CHAT_ID guruhni ko\'rsatadi — zaxira yuborilmaydi. Shaxsiy chat ID\'sini yozing ' +
+      '(yoki ataylab xohlasangiz BACKUP_ALLOW_GROUP=true).');
+  }
+  if (config.backupToTelegram && !config.backupChatId && !config.adminChatIds.some((id) => id > 0)) {
+    warn.push('Avtomatik zaxira yuborilmaydi: shaxsiy chat yo\'q. BACKUP_CHAT_ID ga o\'z Telegram ID\'ingizni yozing.');
   }
   if (isReplit && config.storageMode === 'off') {
     warn.push('DIQQAT: Replit\'da fayl tizimi saqlanmaydi. STORAGE_MODE=replit qiling, aks holda qayta nashrda murojaatlar tarixi yo\'qoladi ' +

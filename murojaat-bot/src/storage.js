@@ -69,7 +69,7 @@ const isEnabled = () => !!getAdapter();
 
 /**
  * Ishga tushishda: baza fayli yo'q bo'lsa — tashqi xotiradan tiklaymiz.
- * MUHIM: bu funksiya src/db.js yuklanishidan OLDIN chaqirilishi kerak.
+ * MUHIM: bu funksiya src/store.js yuklanishidan OLDIN chaqirilishi kerak.
  * @returns {Promise<boolean>} tiklandimi
  */
 async function restoreIfMissing() {

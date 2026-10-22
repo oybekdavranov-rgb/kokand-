@@ -12,6 +12,9 @@ const escapeHtml = (text) => String(text ?? '')
 /** Boshqaruv belgilarini olib tashlaydi va uzunlikni cheklaydi */
 const sanitizeText = (text, maxLength = 4000) => String(text ?? '')
   .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '')
+  /* Yo'nalish boshqaruvi (U+202E va h.k.) matnni ko'rinishda teskari qiladi —
+     dekanat kartasidagi ism yoki raqamni aldab ko'rsatish mumkin */
+  .replace(/[\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g, '')
   .replace(/\r\n/g, '\n')
   .trim()
   .slice(0, maxLength);

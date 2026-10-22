@@ -47,9 +47,10 @@ bot nomini va foydalanuvchi nomini tanlaysiz → u token beradi.
 
 **Chat ID** (murojaatlar qayerga kelishi):
 - Shaxsiy chat: [@userinfobot](https://t.me/userinfobot) ga `/start` yozing — `Id: 123456789`.
-- Dekanat guruhi: botni guruhga qo'shing, **admin** qiling, guruhga biror xabar
-  yozing va ID'ni [@userinfobot](https://t.me/userinfobot) orqali aniqlang
-  (guruh ID'si `-100...` bilan boshlanadi).
+- Dekanat guruhi: botni guruhga qo'shing, guruhga biror xabar yozing va ID'ni
+  [@userinfobot](https://t.me/userinfobot) orqali aniqlang (guruh ID'si `-100...`
+  bilan boshlanadi). Botni **admin qilish shart emas** — murojaat kartasiga
+  qilingan «reply» botga maxfiylik rejimida ham yetib boradi.
 
 ---
 
@@ -132,8 +133,8 @@ istalgan vaqtda ham). Tiklash kerak bo'lsa:
 |---|---|
 | `⛔️ Sozlamalarda xato` | logda qaysi Secret yetishmayotgani yozilgan |
 | Bot javob bermayapti | `BOT_TOKEN` xato (log: `401 Unauthorized`), yoki Secrets o'zgartirilib qayta nashr qilinmagan |
-| Murojaat dekanatga kelmayapti | `ADMIN_CHAT_IDS` noto'g'ri; guruh bo'lsa bot guruhga qo'shilganmi va admin qilinganmi |
-| Guruhda javob ishlamaydi | botga guruhda **admin** huquqini bering |
+| Murojaat dekanatga kelmayapti | `ADMIN_CHAT_IDS` noto'g'ri; guruh bo'lsa bot guruhga qo'shilganmi |
+| Guruhda javob ishlamaydi | javobni murojaat kartasiga **«reply»** qilib yozing yoki `/javob MR-… matn` |
 | «Sizda huquq yo'q» | `ADMIN_USER_IDS` ga o'z ID'ingizni qo'shing (yoki bu kalitni umuman olib tashlang) |
 | `storage: false` | 4-qadam bajarilmagan |
 | `better-sqlite3` xatosi | Shell: `npm rebuild better-sqlite3 --build-from-source` |

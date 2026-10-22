@@ -1,7 +1,7 @@
 'use strict';
 /* =====================================================================
-   Oddiy strukturali log. Bot tokeni va cookie'lar hech qachon
-   logga tushmaydi (redaktsiya qilinadi).
+   Oddiy strukturali log. Bot tokeni va webhook maxfiy kaliti hech
+   qachon logga tushmaydi (redaktsiya qilinadi).
    ===================================================================== */
 const { config } = require('./config');
 
@@ -12,7 +12,6 @@ function redact(value) {
   let text = typeof value === 'string' ? value : JSON.stringify(value);
   if (!text) return text;
   if (config.botToken) text = text.split(config.botToken).join('***TOKEN***');
-  if (config.sessionSecret) text = text.split(config.sessionSecret).join('***SECRET***');
   if (config.webhookSecret) text = text.split(config.webhookSecret).join('***WEBHOOK_SECRET***');
   return text.replace(/\d{6,}:[A-Za-z0-9_-]{30,}/g, '***TOKEN***');
 }

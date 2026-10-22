@@ -39,7 +39,17 @@ Kerak bo'ladigan ikki qiymat:
 | `ADMIN_CHAT_IDS` | [@userinfobot](https://t.me/userinfobot) ga `/start` — u sizning ID'ingizni beradi |
 
 Dekanat **guruhi** ishlatilsa: botni guruhga qo'shing, guruh ID'sini (`-100...` bilan
-boshlanadi) yozing va `ADMIN_USER_IDS` ga javob bera oladigan xodimlar ID'sini qo'shing.
+boshlanadi) yozing va `ADMIN_USER_IDS` ga javob bera oladigan xodimlar ID'sini qo'shing
+(guruh ishlatilganda bu **majburiy** — aks holda bot ishga tushmaydi, chunki
+`ADMIN_USER_IDS` bo'sh bo'lsa guruhdagi har kim dekanat nomidan javob bera olardi).
+
+> **Guruhda bot qo'shimcha huquq so'ramaydi.** Telegram'ning «maxfiylik rejimi»
+> (privacy mode, BotFather'da sukut bo'yicha **yoniq**) botga guruhdagi barcha
+> xabarlarni ko'rsatmaydi, lekin **botning o'z xabariga qilingan «reply»** har doim
+> yetib boradi — javob oqimi shuning ustida ishlaydi. Shuning uchun botni admin
+> qilish yoki maxfiylik rejimini o'chirish **shart emas**: shunday qilsangiz bot
+> guruhdagi barcha suhbatni ko'radi (bot unga aralashmaydi, lekin ortiqcha ma'lumot
+> oladi).
 
 > Replit'da ishga tushirish: **[REPLIT.md](REPLIT.md)**
 
@@ -50,7 +60,8 @@ boshlanadi) yozing va `ADMIN_USER_IDS` ga javob bera oladigan xodimlar ID'sini q
 | Nima qiladi | Natija |
 |---|---|
 | Istalgan matn yozadi (12+ belgi) | murojaat raqam oladi va dekanatga yuboriladi |
-| Rasm / hujjat / ovozli xabar | murojaatga ilova bo'lib dekanatga boradi |
+| Rasm / hujjat / ovozli xabar / GIF | murojaatga ilova bo'lib dekanatga boradi |
+| Dekanat javobiga «reply» qilib yozadi | yangi murojaat oldingisiga bog'lanadi (kartada `↩️ Javobga qo'shimcha`) |
 | `/murojaatlarim` | o'z murojaatlari va holati |
 | `/holat MR-2026-0007` | aniq murojaat holati va javobi |
 | `/yordam` | qoidalar va maxfiylik haqida |
@@ -86,8 +97,11 @@ Javob berish: shu xabarga «reply» qilib yozing
 |---|---|
 | Javob berish | xabarga **«reply»** qilib yozasiz |
 | Javob berish (reply'siz) | `/javob MR-2026-0007 javob matni` |
+| Javobga hujjat/rasm ilova qilish | kartaga «reply» qilib faylni yuborasiz (izoh bilan yoki izohsiz) — fayl fuqaroga ham boradi |
 | Holatni o'zgartirish | xabar tagidagi tugmalar |
 | Suiiste'molchini bloklash | `⛔️ Bloklash` tugmasi yoki `/bloklash MR-2026-0007 sabab` |
+| Kartani qaytadan chiqarish | `/murojaat MR-2026-0007` (xabar o'chib ketsa) |
+| Yetib bormagan murojaatlarni yuborish | `/navbat` (bot chatga yoza olmagan bo'lsa) |
 | Qisqa hisobot | `/statistika` |
 | Javobsiz qolganlar | `/kechikkanlar` |
 | Bazaning nusxasi | `/zaxira` |
@@ -151,12 +165,13 @@ Barchasi `.env.example` da izohlari bilan. Eng muhimlari:
 |---|---|
 | `BOT_TOKEN` | Telegram bot tokeni (maxfiy!) |
 | `ADMIN_CHAT_IDS` | murojaatlar shu chat(lar)ga boradi |
-| `ADMIN_USER_IDS` | kim javob bera oladi (guruh ishlatilsa — to'ldiring) |
+| `ADMIN_USER_IDS` | kim javob bera oladi (guruh ishlatilsa — **majburiy**) |
 | `BOT_MODE` | `polling` yoki `webhook` |
 | `APPEALS_PER_HOUR` / `APPEALS_PER_DAY` | spam chegaralari |
 | `SLA_HOURS` | javobsiz murojaat «kechikkan» deb belgilanadigan muddat |
 | `DIGEST_HOUR` | kunlik xulosa soati |
-| `BACKUP_TO_TELEGRAM` | bazani admin chatiga fayl qilib yuborish |
+| `BACKUP_TO_TELEGRAM` | bazani Telegram'ga fayl qilib yuborish (faqat shaxsiy chatga) |
+| `BACKUP_CHAT_ID` | zaxira keladigan shaxsiy chat ID'si |
 | `STORAGE_MODE` | `replit` / `local` / `off` — fayl tizimi saqlanmaydigan muhitlar uchun |
 | `DATA_DIR` | baza joyi |
 
@@ -182,8 +197,13 @@ Barchasi `.env.example` da izohlari bilan. Eng muhimlari:
 
 ## 7. Zaxira va tiklash
 
-Bot har kuni (va `/zaxira` buyrug'i bilan) bazani admin chatiga yuboradi.
+Bot har kuni (va `/zaxira` buyrug'i bilan) bazani **shaxsiy** chatga yuboradi.
 Bu fayllarni o'chirmang — ular sizning zaxirangiz.
+
+> Zaxira guruhga **yuborilmaydi**: bazada fuqarolarning telefon raqami va murojaat
+> matnlari bor, guruhdagi fayl esa keyin qo'shilgan hamma uchun ochiq bo'lib qoladi.
+> `/zaxira` guruhda yozilsa, bot uni so'ragan xodimning shaxsiy chatiga (yoki
+> `BACKUP_CHAT_ID` ga) yuboradi.
 
 ```bash
 npm run backup                      # qo'lda zaxira (data/backups/)
@@ -213,7 +233,8 @@ yozishmalar Telegram'da saqlanib turadi.
 |---|---|
 | `⛔️ Sozlamalarda xato` | logda qaysi qiymat yetishmayotgani yozilgan |
 | Murojaat kelmayapti | `ADMIN_CHAT_IDS` to'g'rimi; guruh bo'lsa bot guruhga qo'shilganmi |
-| Guruhda javob ishlamayapti | botga guruhda **admin** huquqi bering (xabarlarni ko'rishi uchun) |
+| Guruhda javob ishlamayapti | javobni **murojaat kartasiga «reply»** qilib yozing (shunchaki xabar yozilsa bot ko'rmaydi); kerak bo'lsa `/javob MR-… matn` |
+| Bot guruhdagi gaplarga javob bermaydi | shunday bo'lishi kerak: bot faqat «reply», buyruq yoki o'z nomi tilga olinganda gapiradi |
 | «Sizda huquq yo'q» | `ADMIN_USER_IDS` ga o'z ID'ingizni qo'shing |
 | Javob yetmadi | fuqaro botni bloklagan — xabar aniq ko'rsatiladi |
 | `better-sqlite3` xatosi | `npm rebuild better-sqlite3 --build-from-source` |

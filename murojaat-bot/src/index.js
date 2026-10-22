@@ -29,12 +29,24 @@ let bot = null;
 let setMyCommands = null;
 let sendDailyDigest = null;
 let sendBackupToTelegram = null;
+let retryUndelivered = null;
 let server = null;
 let shuttingDown = false;
 
 function createServer() {
-  const handleWebhook = config.botMode === 'webhook'
+  const webhook = config.botMode === 'webhook'
     ? webhookCallback(bot, 'http', { secretToken: config.webhookSecret, timeoutMilliseconds: 25_000, onTimeout: 'return' })
+    : null;
+
+  /* Himoya qatlami: update'ni ishlashda xato bo'lsa ham Telegram'ga javob
+     qaytaramiz — aks holda so'rov osilib qoladi va Telegram uni qayta-qayta
+     yuboradi (cheksiz tsikl). */
+  const handleWebhook = webhook
+    ? (req, res) => Promise.resolve(webhook(req, res)).catch((err) => {
+      log.error('webhook update ishlanmadi', { error: String(err?.message || err) });
+      if (!res.headersSent) { res.writeHead(200, { 'Content-Type': 'text/plain' }); res.end('ok'); }
+      else if (!res.writableEnded) res.end();
+    })
     : null;
 
   return http.createServer((req, res) => {
@@ -45,10 +57,11 @@ function createServer() {
     }
 
     if (req.method === 'GET' && (url === '/healthz' || url === '/' || url === '/health')) {
-      const botOk = config.botMode !== 'polling' || !!bot.botInfo;
+      const botReady = !!bot.botInfo;
+      const botOk = config.botMode !== 'polling' || botReady;
       const body = JSON.stringify({
         ok: botOk,
-        bot: botOk,
+        bot: botReady,
         mode: config.botMode,
         storage: storage.isEnabled(),
         admins: config.adminChatIds.length,
@@ -73,7 +86,7 @@ async function main() {
   await storage.restoreIfMissing();
 
   store = require('./store');
-  ({ bot, setMyCommands, sendDailyDigest, sendBackupToTelegram } = require('./bot'));
+  ({ bot, setMyCommands, sendDailyDigest, sendBackupToTelegram, retryUndelivered } = require('./bot'));
 
   /* --- 3. Jadvalli vazifalar --- */
   const digest = setInterval(() => {
@@ -81,6 +94,16 @@ async function main() {
     sendBackupToTelegram().catch((err) => log.warn('zaxira xatosi', { error: String(err.message) }));
   }, 20 * 60_000);
   digest.unref();
+
+  /* Dekanat chati bir lahza ishlamagan bo'lsa — murojaatni qayta yuboramiz */
+  const retry = setInterval(() => {
+    retryUndelivered().catch((err) => log.warn('qayta yuborish xatosi', { error: String(err.message) }));
+  }, 5 * 60_000);
+  retry.unref();
+  const firstRetry = setTimeout(() => {
+    retryUndelivered().catch((err) => log.warn('qayta yuborish xatosi', { error: String(err.message) }));
+  }, 30_000);
+  firstRetry.unref();
 
   if (config.backupToTelegram) {
     const firstBackup = setTimeout(() => {

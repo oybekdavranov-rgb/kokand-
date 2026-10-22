@@ -130,6 +130,32 @@ const MIGRATIONS = [
       updated_at INTEGER NOT NULL
     );
   `),
+  /* Fuqaro dekanat javobiga yozsa — yangi murojaat oldingisiga bog'lanadi */
+  () => db.exec('ALTER TABLE appeals ADD COLUMN related_code TEXT'),
+  /* Javob qaysi admin xabaridan kelgani — Telegram update'ni qayta yetkazsa
+     fuqaro bitta javobni ikki marta olmasligi uchun */
+  () => db.exec(`
+    ALTER TABLE replies ADD COLUMN source_chat_id INTEGER;
+    ALTER TABLE replies ADD COLUMN source_message_id INTEGER;
+    CREATE UNIQUE INDEX replies_source ON replies(source_chat_id, source_message_id)
+      WHERE source_chat_id IS NOT NULL;
+  `),
+  /* Matnsiz yuborilgan fayllar: qayta ishga tushishda yo'qolmasin */
+  () => db.exec(`
+    CREATE TABLE pending_attachments (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      tg_id      INTEGER NOT NULL,
+      kind       TEXT    NOT NULL,
+      file_id    TEXT    NOT NULL,
+      file_name  TEXT,
+      file_size  INTEGER,
+      created_at INTEGER NOT NULL,
+      expires_at INTEGER NOT NULL
+    );
+    CREATE INDEX pending_tg ON pending_attachments(tg_id, expires_at);
+    /* Bitta murojaatga bitta fayl ikki marta yozilmasin (qayta yetkazilgan albom) */
+    CREATE UNIQUE INDEX attachments_unique ON attachments(appeal_id, file_id);
+  `),
 ];
 
 (function migrate() {
@@ -184,8 +210,8 @@ const listBlocked = (limit = 20) => qListBlocked.all(limit);
 
 /* ----------------------------- Murojaatlar -------------------------- */
 const qInsertAppeal = db.prepare(`
-  INSERT INTO appeals (code, tg_id, author_name, author_username, author_phone, body, status, created_at, updated_at, chat_id, message_id)
-  VALUES (@code, @tg_id, @author_name, @author_username, @author_phone, @body, 'new', @ts, @ts, @chat_id, @message_id)`);
+  INSERT INTO appeals (code, tg_id, author_name, author_username, author_phone, body, status, created_at, updated_at, chat_id, message_id, related_code)
+  VALUES (@code, @tg_id, @author_name, @author_username, @author_phone, @body, 'new', @ts, @ts, @chat_id, @message_id, @related_code)`);
 const qCountYear = db.prepare('SELECT COUNT(*) AS n FROM appeals WHERE code LIKE ?');
 const qFindByMessage = db.prepare('SELECT * FROM appeals WHERE tg_id = ? AND chat_id = ? AND message_id = ? LIMIT 1');
 const qGetAppeal = db.prepare('SELECT * FROM appeals WHERE id = ?');
@@ -213,6 +239,7 @@ const createAppeal = db.transaction((data) => {
         ts: now(),
         chat_id: data.chatId,
         message_id: data.messageId || null,
+        related_code: data.relatedCode || null,
       });
       return qGetAppeal.get(Number(info.lastInsertRowid));
     } catch (err) {
@@ -239,7 +266,7 @@ const lastAppealAt = (tgId) => qLastAppealAt.get(tgId)?.created_at || 0;
 
 const qSetStatus = db.prepare(`
   UPDATE appeals SET status = @status, updated_at = @ts,
-    answered_at = CASE WHEN @status IN ('answered','closed') THEN COALESCE(answered_at, @answeredAt) ELSE NULL END
+    answered_at = CASE WHEN @status IN ('answered','closed') THEN COALESCE(answered_at, @answeredAt) ELSE answered_at END
   WHERE id = @id`);
 function setAppealStatus(id, status) {
   if (!STATUSES.includes(status)) throw new Error('Noto\'g\'ri status');
@@ -288,14 +315,49 @@ function stats(slaMs = 48 * 3600_000) {
 
 /* ------------------------------ Ilovalar ---------------------------- */
 const qAddAttachment = db.prepare(`
-  INSERT INTO attachments (appeal_id, kind, file_id, file_name, file_size, created_at)
+  INSERT OR IGNORE INTO attachments (appeal_id, kind, file_id, file_name, file_size, created_at)
   VALUES (@appeal_id, @kind, @file_id, @file_name, @file_size, @ts)`);
+/** @returns {boolean} yangi yozuv qo'shildimi (takroriy fayl bo'lsa — false) */
 const addAttachment = (appealId, att) => qAddAttachment.run({
   appeal_id: appealId, kind: att.kind, file_id: att.fileId,
   file_name: att.fileName || null, file_size: att.fileSize || null, ts: now(),
-});
+}).changes > 0;
 const qCountAttachments = db.prepare('SELECT COUNT(*) AS n FROM attachments WHERE appeal_id = ?');
 const countAttachments = (appealId) => qCountAttachments.get(appealId).n;
+
+const qListAttachments = db.prepare('SELECT * FROM attachments WHERE appeal_id = ? ORDER BY id LIMIT ?');
+const listAttachments = (appealId, limit = 10) => qListAttachments.all(appealId, limit)
+  .map((row) => ({ kind: row.kind, fileId: row.file_id, fileName: row.file_name, fileSize: row.file_size }));
+
+/* ------------------- Kutayotgan ilovalar (matnsiz) ------------------ */
+const qAddPending = db.prepare(`
+  INSERT INTO pending_attachments (tg_id, kind, file_id, file_name, file_size, created_at, expires_at)
+  VALUES (@tg_id, @kind, @file_id, @file_name, @file_size, @ts, @expires)`);
+const qListPending = db.prepare('SELECT * FROM pending_attachments WHERE tg_id = ? AND expires_at > ? ORDER BY id LIMIT ?');
+const qCountExpiredPending = db.prepare('SELECT COUNT(*) AS n FROM pending_attachments WHERE tg_id = ? AND expires_at <= ?');
+const qDeletePending = db.prepare('DELETE FROM pending_attachments WHERE tg_id = ?');
+const qPruneExpired = db.prepare('DELETE FROM pending_attachments WHERE expires_at <= ?');
+const qCountPending = db.prepare('SELECT COUNT(*) AS n FROM pending_attachments WHERE tg_id = ? AND expires_at > ?');
+
+const addPendingAttachment = (tgId, att, ttlMs) => qAddPending.run({
+  tg_id: tgId, kind: att.kind, file_id: att.fileId,
+  file_name: att.fileName || null, file_size: att.fileSize || null,
+  ts: now(), expires: now() + ttlMs,
+});
+const countPendingAttachments = (tgId) => qCountPending.get(tgId, now()).n;
+
+/** Kutayotgan fayllarni oladi va o'chiradi. `expired` — muddati o'tganlar soni. */
+const takePendingAttachments = db.transaction((tgId, limit = 10) => {
+  const ts = now();
+  const rows = qListPending.all(tgId, ts, limit);
+  const expired = qCountExpiredPending.get(tgId, ts).n;
+  qDeletePending.run(tgId);
+  return {
+    items: rows.map((row) => ({ kind: row.kind, fileId: row.file_id, fileName: row.file_name, fileSize: row.file_size })),
+    expired,
+  };
+});
+const prunePendingAttachments = () => qPruneExpired.run(now()).changes;
 
 /* --------------------- Marshrutlar (reply uchun) -------------------- */
 const qAddRoute = db.prepare(`INSERT OR REPLACE INTO routes (chat_id, message_id, appeal_id, is_header, created_at)
@@ -308,14 +370,46 @@ const findRoute = (chatId, messageId) => qFindRoute.get(chatId, messageId);
 const qHeaderRoutes = db.prepare('SELECT * FROM routes WHERE appeal_id = ? AND is_header = 1');
 const listHeaderRoutes = (appealId) => qHeaderRoutes.all(appealId);
 
+/* Dekanat chatiga yetib bormagan murojaatlar (karta marshruti yo'q) */
+const qUndelivered = db.prepare(`
+  SELECT a.* FROM appeals a
+  WHERE a.created_at > ?
+    AND NOT EXISTS (SELECT 1 FROM routes r WHERE r.appeal_id = a.id AND r.is_header = 1)
+  ORDER BY a.created_at LIMIT ?`);
+const listUndelivered = (sinceMs, limit = 10) => qUndelivered.all(sinceMs, limit);
+
 /* ------------------------------ Javoblar ---------------------------- */
-const qAddReply = db.prepare(`INSERT INTO replies (appeal_id, author, body, created_at, delivered)
-  VALUES (?, ?, ?, ?, 0)`);
-const addReply = (appealId, { author, body }) => Number(qAddReply.run(appealId, author, body, now()).lastInsertRowid);
+const qAddReply = db.prepare(`INSERT INTO replies (appeal_id, author, body, created_at, delivered, source_chat_id, source_message_id)
+  VALUES (?, ?, ?, ?, 0, ?, ?)`);
+const qFindReplyBySource = db.prepare('SELECT * FROM replies WHERE source_chat_id = ? AND source_message_id = ?');
+
+/**
+ * Javobni yozadi. `source` berilsa va o'sha admin xabari allaqachon
+ * yozilgan bo'lsa — `{ duplicate: true }` qaytaradi (qayta yuborilmaydi).
+ */
+function addReply(appealId, { author, body, source = null }) {
+  const chatId = source?.chatId ?? null;
+  const messageId = source?.messageId ?? null;
+  if (chatId !== null && messageId !== null) {
+    const existing = qFindReplyBySource.get(chatId, messageId);
+    /* Avvalgi urinish yetkazilmagan bo'lsa — qayta yuborishga ruxsat beramiz */
+    if (existing) return { id: existing.id, duplicate: !!existing.delivered, delivered: !!existing.delivered };
+  }
+  try {
+    const info = qAddReply.run(appealId, author, body, now(), chatId, messageId);
+    return { id: Number(info.lastInsertRowid), duplicate: false, delivered: false };
+  } catch (err) {
+    if (String(err.message).includes('UNIQUE') && chatId !== null) {
+      const existing = qFindReplyBySource.get(chatId, messageId);
+      if (existing) return { id: existing.id, duplicate: !!existing.delivered, delivered: !!existing.delivered };
+    }
+    throw err;
+  }
+}
 
 const qMarkDelivered = db.prepare('UPDATE replies SET delivered = ?, delivery_error = ? WHERE id = ?');
 const markReplyDelivered = (id, ok, error = null) =>
-  qMarkDelivered.run(ok ? 1 : 0, ok ? null : String(error || '').slice(0, 300), id);
+  qMarkDelivered.run(ok ? 1 : 0, error ? String(error).slice(0, 300) : null, id);
 
 const qListReplies = db.prepare('SELECT * FROM replies WHERE appeal_id = ? ORDER BY created_at');
 const listReplies = (appealId) => qListReplies.all(appealId);
@@ -336,7 +430,8 @@ module.exports = {
   createAppeal, getAppeal, getAppealByCode, getRecentAppealOfUser, listUserAppeals,
   countAppealsSince, lastAppealAt, setAppealStatus, touchAppeal, setAppealPhone,
   markProgressNotified, listOverdue, stats,
-  addAttachment, countAttachments,
-  addRoute, findRoute, listHeaderRoutes,
+  addAttachment, countAttachments, listAttachments,
+  addPendingAttachment, takePendingAttachments, countPendingAttachments, prunePendingAttachments,
+  addRoute, findRoute, listHeaderRoutes, listUndelivered,
   addReply, markReplyDelivered, listReplies,
 };

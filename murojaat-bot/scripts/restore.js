@@ -74,5 +74,5 @@ try { fs.chmodSync(config.dbFile, 0o600); } catch { /* FS qo'llab-quvvatlamasa *
 fs.rmSync(work, { force: true });
 
 console.log('\n  ✅ Tiklandi: ' + config.dbFile);
-console.log(`     Murojaatlar: ${summary.appeals} · Adminlar: ${summary.admins} · Sxema: v${summary.version}`);
+console.log(`     Murojaatlar: ${summary.appeals} · Foydalanuvchilar: ${summary.users} · Sxema: v${summary.version}`);
 console.log('     Endi xizmatni qayta ishga tushiring (Replit: Run / Redeploy).\n');
