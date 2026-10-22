@@ -960,6 +960,134 @@ const toUser = (id) => sent.filter((m) => String(m.chat_id) === String(id));
         !/Sozlamalarda xato/.test(groupOk.out), groupOk.out.slice(-200));
     }
 
+    section('Eski bazani yangilash (migratsiya)');
+    {
+      /* v1 sxemali baza (birinchi versiyada chiqarilgan) — yangi kod uni
+         yo'qotmasdan yangilashi va yangi imkoniyatlar ishlashi kerak */
+      const V1_SCHEMA = `
+    CREATE TABLE users (
+      tg_id        INTEGER PRIMARY KEY,
+      username     TEXT,
+      first_name   TEXT,
+      last_name    TEXT,
+      phone        TEXT,
+      lang         TEXT,
+      first_seen   INTEGER NOT NULL,
+      last_seen    INTEGER NOT NULL,
+      is_blocked   INTEGER NOT NULL DEFAULT 0,
+      block_reason TEXT,
+      blocked_at   INTEGER
+    );
+
+    CREATE TABLE appeals (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      code            TEXT    NOT NULL UNIQUE,
+      tg_id           INTEGER NOT NULL REFERENCES users(tg_id) ON DELETE CASCADE,
+      author_name     TEXT,
+      author_username TEXT,
+      author_phone    TEXT,
+      body            TEXT    NOT NULL,
+      status          TEXT    NOT NULL DEFAULT 'new',
+      created_at      INTEGER NOT NULL,
+      updated_at      INTEGER NOT NULL,
+      answered_at     INTEGER,
+      progress_notified_at INTEGER,
+      chat_id         INTEGER NOT NULL,
+      message_id      INTEGER
+    );
+    CREATE INDEX appeals_created ON appeals(created_at DESC);
+    CREATE INDEX appeals_status  ON appeals(status, created_at DESC);
+    CREATE INDEX appeals_tg      ON appeals(tg_id, created_at DESC);
+    CREATE INDEX appeals_message ON appeals(tg_id, chat_id, message_id);
+
+    CREATE TABLE attachments (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      appeal_id  INTEGER NOT NULL REFERENCES appeals(id) ON DELETE CASCADE,
+      kind       TEXT    NOT NULL,
+      file_id    TEXT    NOT NULL,
+      file_name  TEXT,
+      file_size  INTEGER,
+      created_at INTEGER NOT NULL
+    );
+    CREATE INDEX attachments_appeal ON attachments(appeal_id);
+
+    /* Admin chatidagi xabar ↔ murojaat. "Reply" shu orqali topiladi. */
+    CREATE TABLE routes (
+      chat_id    INTEGER NOT NULL,
+      message_id INTEGER NOT NULL,
+      appeal_id  INTEGER NOT NULL REFERENCES appeals(id) ON DELETE CASCADE,
+      is_header  INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL,
+      PRIMARY KEY (chat_id, message_id)
+    );
+    CREATE INDEX routes_appeal ON routes(appeal_id);
+
+    CREATE TABLE replies (
+      id             INTEGER PRIMARY KEY AUTOINCREMENT,
+      appeal_id      INTEGER NOT NULL REFERENCES appeals(id) ON DELETE CASCADE,
+      author         TEXT    NOT NULL,
+      body           TEXT    NOT NULL,
+      created_at     INTEGER NOT NULL,
+      delivered      INTEGER NOT NULL DEFAULT 0,
+      delivery_error TEXT
+    );
+    CREATE INDEX replies_appeal ON replies(appeal_id, created_at);
+
+    CREATE TABLE settings (
+      key        TEXT PRIMARY KEY,
+      value      TEXT NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+  `;
+      const oldDir = fs.mkdtempSync(path.join(os.tmpdir(), 'murojaat-v1-'));
+      const oldDb = new Database(path.join(oldDir, 'murojaat.db'));
+      oldDb.exec(V1_SCHEMA);
+      const ts = Date.now();
+      oldDb.prepare('INSERT INTO users (tg_id, first_name, first_seen, last_seen) VALUES (?, ?, ?, ?)').run(555, 'Eski', ts, ts);
+      oldDb.prepare(`INSERT INTO appeals (code, tg_id, author_name, author_phone, body, status, created_at, updated_at, chat_id, message_id)
+        VALUES ('MR-2020-0001', 555, 'Eski Foydalanuvchi', '+998901234567', 'Eski bazadagi murojaat matni.', 'new', ?, ?, 555, 7)`).run(ts, ts);
+      oldDb.prepare('INSERT INTO attachments (appeal_id, kind, file_id, created_at) VALUES (1, \'photo\', \'eski_file\', ?)').run(ts);
+      oldDb.prepare('INSERT INTO routes (chat_id, message_id, appeal_id, is_header, created_at) VALUES (?, ?, 1, 1, ?)').run(ADMIN_CHAT, 4242, ts);
+      oldDb.pragma('user_version = 1');
+      oldDb.close();
+
+      const migrateOut = (() => {
+        try {
+          return execFileSync(process.execPath, ['-e', `
+            const store = require(${JSON.stringify(path.join(__dirname, '..', 'src', 'store.js'))});
+            const appeal = store.getAppealByCode('MR-2020-0001');
+            store.addPendingAttachment(555, { kind: 'photo', fileId: 'yangi', fileName: 'y.jpg', fileSize: 10 }, 60000);
+            const taken = store.takePendingAttachments(555, 5).items.length;
+            const dup1 = store.addReply(appeal.id, { author: '@dekan', body: 'Javob', source: { chatId: ${ADMIN_CHAT}, messageId: 1 } });
+            store.markReplyDelivered(dup1.id, true);
+            const dup2 = store.addReply(appeal.id, { author: '@dekan', body: 'Javob', source: { chatId: ${ADMIN_CHAT}, messageId: 1 } });
+            console.log(JSON.stringify({
+              version: store.db.pragma('user_version', { simple: true }),
+              body: appeal.body, phone: appeal.author_phone,
+              attachments: store.listAttachments(appeal.id, 5).length,
+              route: !!store.findRoute(${ADMIN_CHAT}, 4242),
+              taken, dedupe: dup2.duplicate,
+              attachDupeIgnored: store.addAttachment(appeal.id, { kind: 'photo', fileId: 'eski_file' }) === false,
+              replies: store.listReplies(appeal.id).length,
+            }));
+            store.close();
+          `], {
+            cwd: path.join(__dirname, '..'), encoding: 'utf8',
+            env: { PATH: process.env.PATH, HOME: process.env.HOME, ENV_FILE: '/dev/null', LOG_LEVEL: 'error', BOT_TOKEN, ADMIN_CHAT_IDS: String(ADMIN_USER), DATA_DIR: oldDir },
+          });
+        } catch (err) { return String(err.stdout || '') + String(err.stderr || ''); }
+      })();
+      let mig = {};
+      try { mig = JSON.parse(migrateOut.trim().split('\n').pop()); } catch { /* xato */ }
+      check('eski (v1) baza yangi sxemaga ko\'chadi', mig.version === 4, migrateOut.slice(-200));
+      check('migratsiyada murojaat, telefon va ilova yo\'qolmaydi',
+        mig.body === 'Eski bazadagi murojaat matni.' && mig.phone === '+998901234567' &&
+        mig.attachments === 1 && mig.route === true, JSON.stringify(mig).slice(0, 200));
+      check('eski bazada yangi imkoniyatlar ishlaydi',
+        mig.taken === 1 && mig.dedupe === true && mig.attachDupeIgnored === true && mig.replies === 1,
+        JSON.stringify(mig).slice(0, 200));
+    }
+
     section('Fayl huquqlari');
     const mode = fs.statSync(path.join(dataDir, 'murojaat.db')).mode & 0o777;
     check('baza fayli faqat egasi uchun (600)', mode === 0o600, '0' + mode.toString(8));
