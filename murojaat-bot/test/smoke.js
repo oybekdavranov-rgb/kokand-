@@ -657,6 +657,21 @@ const toUser = (id) => sent.filter((m) => String(m.chat_id) === String(id));
       sent.some((m) => String(m.text).includes('Bunday buyruq yo\'q')),
       JSON.stringify(sent.map((m) => String(m.text).slice(0, 50))).slice(0, 150));
 
+    /* Guruh supergruppaga aylansa — dekanat yangi guruhda ogohlantiriladi */
+    sent.length = 0;
+    await sendUpdate({
+      message: {
+        message_id: ++messageId, date: Math.floor(Date.now() / 1000),
+        chat: { id: ADMIN_CHAT, type: 'group' },
+        from: { id: ADMIN_USER, is_bot: false, first_name: 'Dekan' },
+        migrate_to_chat_id: -1009999999999,
+      },
+    });
+    await sleep(300);
+    check('guruh ID o\'zgarsa yangi guruhga ogohlantirish boradi',
+      sent.some((m) => String(m.chat_id) === '-1009999999999' && String(m.text).includes('ADMIN_CHAT_IDS')),
+      JSON.stringify(sent.map((m) => [m.chat_id, String(m.text).slice(0, 40)])).slice(0, 220));
+
     section('Admin: guruhdagi shovqin');
     sent.length = 0;
     await sendUpdate(adminMessage('Shunchaki eslatma yozdim'));

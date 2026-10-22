@@ -247,6 +247,23 @@ bot.use(async (ctx, next) => {
 
   ctx.state = { adminChat, isPrivate, admin: adminChat && isAdminUser(from.id) };
 
+  /* Guruh supergruppaga aylansa chat_id butunlay o'zgaradi va ADMIN_CHAT_IDS
+     eskiradi — murojaatlar navbatda qolib ketadi. Dekanatni yangi guruhda
+     ogohlantiramiz, aks holda sabab ko'rinmas bo'ladi. */
+  if (adminChat && ctx.message?.migrate_to_chat_id) {
+    const newChatId = ctx.message.migrate_to_chat_id;
+    log.error('DIQQAT: dekanat guruhi supergruppaga aylandi — ADMIN_CHAT_IDS ni yangilang', {
+      eski: chatId, yangi: newChatId,
+    });
+    await bot.api.sendMessage(newChatId,
+      '⚠️ <b>Diqqat: guruh supergruppaga aylandi va uning ID\'si o\'zgardi.</b>\n\n' +
+      `Sozlamada <code>ADMIN_CHAT_IDS</code> ni yangi ID'ga o'zgartiring:\n<code>${newChatId}</code>\n\n` +
+      'Shundan keyin botni qayta ishga tushirib, <code>/navbat</code> yozing — ' +
+      'shu vaqt ichida kelgan murojaatlar yetkaziladi.',
+      { parse_mode: 'HTML' }).catch(() => {});
+    return;
+  }
+
   /* Flood: faqat oddiy foydalanuvchilarga; albom qismlari hisoblanmaydi */
   if (!adminChat && !ctx.message?.media_group_id && !floodLimiter.check('tg:' + from.id).allowed) {
     const entry = floodNotified.get(from.id) || { at: 0, dropped: 0 };

@@ -235,6 +235,8 @@ yozishmalar Telegram'da saqlanib turadi.
 | Murojaat kelmayapti | `ADMIN_CHAT_IDS` to'g'rimi; guruh bo'lsa bot guruhga qo'shilganmi |
 | Guruhda javob ishlamayapti | javobni **murojaat kartasiga «reply»** qilib yozing (shunchaki xabar yozilsa bot ko'rmaydi); kerak bo'lsa `/javob MR-… matn` |
 | Bot guruhdagi gaplarga javob bermaydi | shunday bo'lishi kerak: bot faqat «reply», buyruq yoki o'z nomi tilga olinganda gapiradi |
+| Guruh supergruppaga aylandi | bot yangi guruhga yangi ID'ni yozib beradi: `ADMIN_CHAT_IDS` ni yangilab, qayta ishga tushiring va `/navbat` yozing |
+| Murojaat kelmay qoldi, keyin tiklandi | yetib bormagan murojaatlar navbatda qoladi: `/navbat` (yoki 5 daqiqada o'zi) yetkazadi, `/kechikkanlar` ko'rsatadi |
 | «Sizda huquq yo'q» | `ADMIN_USER_IDS` ga o'z ID'ingizni qo'shing |
 | Javob yetmadi | fuqaro botni bloklagan — xabar aniq ko'rsatiladi |
 | `better-sqlite3` xatosi | `npm rebuild better-sqlite3 --build-from-source` |
