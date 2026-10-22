@@ -109,10 +109,13 @@ Javob berish: shu xabarga «reply» qilib yozing
 
 **Avtomatik yordamchilar**
 - Murojaat «Ko'rib chiqilmoqda»ga o'tsa, fuqaroga xabar boradi.
-- Har kuni soat 9:00 da kunlik xulosa keladi: nechta yangi murojaat bor va
-  qaysilari **48 soatdan beri javobsiz** qolgan.
-- Har kuni bazaning nusxasi `.db.gz` fayl bo'lib shu chatga yuboriladi.
-- Javob uzun bo'lsa, Telegram chegarasiga qarab bo'laklab yuboriladi.
+- Har kuni soat 9:00 da kunlik xulosa keladi: nechta yangi murojaat bor,
+  qaysilari **48 soatdan beri javobsiz** va qaysilari shu chatga yetib bormagan.
+- Har kuni bazaning nusxasi `.db.gz` fayl bo'lib **shaxsiy** chatga yuboriladi.
+- Javob uzun bo'lsa, Telegram chegarasiga qarab bo'laklab yuboriladi;
+  javobga ilova qilingan rasm/hujjat ham fuqaroga boradi.
+- Dekanat chatiga yetib bormagan murojaat navbatda qoladi va har 5 daqiqada
+  qayta yuborilishga urinadi (`/navbat` bilan qo'lda ham).
 - Fuqaro botni bloklagan bo'lsa, "yetkazilmadi" deb aniq aytiladi.
 
 ---
@@ -220,7 +223,7 @@ yozishmalar Telegram'da saqlanib turadi.
 | Buyruq | Vazifasi |
 |---|---|
 | `npm start` | botni ishga tushirish |
-| `npm test` | uchdan-uchiga tekshiruv (59 test, Telegram'siz) |
+| `npm test` | uchdan-uchiga tekshiruv (116 test, Telegram'siz) |
 | `npm run backup` | bazaning zaxira nusxasi |
 | `npm run restore -- <fayl>` | zaxiradan tiklash |
 | `npm run webhook set\|info\|delete` | webhook boshqaruvi |

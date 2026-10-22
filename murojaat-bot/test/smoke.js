@@ -73,6 +73,12 @@ function mockApi() {
         case 'getMe':
           return ok({ id: 42, is_bot: true, first_name: 'Murojaat', username: 'murojaat_test_bot' });
         case 'sendMessage': {
+          /* Telegram razmetkani tushunmasa 400 qaytaradi (sinov uchun belgi) */
+          if (String(body.text || '').includes('ENTITY-XATO') && !String(body.text).includes('to\'liq matn keyingi xabarda')) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ ok: false, error_code: 400, description: "Bad Request: can't parse entities" }));
+            return;
+          }
           /* Telegram 4096 belgidan uzun xabarni qabul qilmaydi */
           if (String(body.text || '').length > 4096) {
             res.writeHead(400, { 'Content-Type': 'application/json' });
@@ -638,6 +644,17 @@ const toUser = (id) => sent.filter((m) => String(m.chat_id) === String(id));
     check('kartaga sig\'magan qism alohida xabarda keladi',
       sent.some((m) => String(m.chat_id) === String(ADMIN_CHAT) && String(m.text).includes('davomi')),
       JSON.stringify(sent.filter((m) => String(m.chat_id) === String(ADMIN_CHAT)).map((m) => String(m.text).slice(0, 40))).slice(0, 220));
+
+    /* Karta qabul qilinmasa — qisqartirilgan karta bilan baribir yetkaziladi */
+    sent.length = 0;
+    await sendUpdate(userMessage('Murojaat matni ENTITY-XATO belgisi bilan yuborildi.', { id: 795, first_name: 'Razmetka' }));
+    await sleep(600);
+    const fallbackAppeal = db().prepare('SELECT * FROM appeals WHERE tg_id = 795 ORDER BY id DESC LIMIT 1').get();
+    check('karta rad etilsa qisqartirilgan karta yuboriladi',
+      !!fallbackAppeal &&
+      db().prepare('SELECT COUNT(*) AS n FROM routes WHERE appeal_id = ? AND is_header = 1').get(fallbackAppeal.id).n === 1 &&
+      sent.some((m) => String(m.chat_id) === String(ADMIN_CHAT) && String(m.text).includes('to\'liq matn keyingi xabarda')),
+      JSON.stringify(sent.filter((m) => String(m.chat_id) === String(ADMIN_CHAT)).map((m) => String(m.text).slice(0, 50))).slice(0, 250));
 
     /* «/» bilan boshlangan javob buyruq deb tashlanmasligi kerak */
     const slashRoute = db().prepare('SELECT * FROM routes WHERE appeal_id = ? AND is_header = 1').get(appeal.id);
